@@ -1,0 +1,1389 @@
+// Schéma aligné sur etape1.sql — noms de tables/colonnes conservés via @@map / @map
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model CategorieActe {
+  id        BigInt    @id @default(autoincrement())
+  nom       String
+  createdAt DateTime? @map("created_at")
+  updatedAt DateTime? @map("updated_at")
+
+  actes                        Acte[]
+  assurancePatientCouvertures AssurancePatientCouverture[]
+  feuilleLignes               FeuilleCirculationLigne[]
+  prescriptionLignes          PrescriptionLigne[]
+
+  @@map("categorie_actes")
+}
+
+model Assurance {
+  id          BigInt    @id @default(autoincrement())
+  nom         String
+  /// Code court pour numérotation bordereaux (ex. CNPS)
+  code        String?   @unique @db.VarChar(20)
+  type        String?
+  description String?
+  /// Utilisateur promoteur propriétaire (null = assurance libre)
+  promoteurUserId BigInt? @map("promoteur_user_id")
+  createdAt   DateTime? @map("created_at")
+  updatedAt   DateTime? @map("updated_at")
+
+  promoteurUser     User?              @relation("AssurancePromoteur", fields: [promoteurUserId], references: [id], onDelete: SetNull)
+  actes             Acte[]
+  assurancePatients AssurancePatient[]
+  assuranceValeurs  AssuranceValeur[]
+  produits          Produit[]
+  factures          Facture[]
+  bordereaux        BordereauAssureur[]
+
+  @@index([promoteurUserId])
+  @@map("assurances")
+}
+
+model Patient {
+  id            BigInt    @id @default(autoincrement())
+  civilite      Int
+  patName       String    @map("PatName")
+  patSurname    String    @map("PatSurname")
+  nomJeuneFille String?   @map("nom_jeune_fille")
+  patEmail      String?   @map("PatEmail") @db.VarChar(40)
+  patDob        DateTime  @map("PatDOB") @db.Date
+  patLieuNaiss  String    @map("PatLieuNaiss") @db.VarChar(50)
+  patCni        String?   @map("PatCNI") @db.VarChar(20)
+  patAdress     String    @map("PatAdress") @db.VarChar(200)
+  patNum1       String    @map("PatNum1") @db.VarChar(20)
+  patNum2       String?   @map("PatNum2") @db.VarChar(20)
+  patProfession String?   @map("PatProfession") @db.VarChar(100)
+  sexe          Int
+  createdAt     DateTime? @map("created_at")
+  updatedAt     DateTime? @map("updated_at")
+
+  assurancePatients AssurancePatient[]
+  wallet            Wallet?
+
+  @@map("patients")
+}
+
+model Acte {
+  id              BigInt    @id @default(autoincrement())
+  nom             String
+  categorieId     BigInt    @map("categorie_id")
+  assureurId      BigInt?   @map("assureur_id")
+  codeBase        String?   @map("code_base")
+  coefficient     Float     @default(1)
+  valeurFixe      Float?    @map("valeur_fixe")
+  prixHnc         Decimal?  @map("prix_hnc") @db.Decimal(10, 2)
+  createdAt       DateTime? @map("created_at")
+  updatedAt       DateTime? @map("updated_at")
+  imputeAssurance Int?      @map("impute_assurance") @db.SmallInt
+  typeActe        String?   @map("type_acte")
+
+  categorie CategorieActe @relation(fields: [categorieId], references: [id], onDelete: Cascade)
+  assureur  Assurance?    @relation(fields: [assureurId], references: [id], onDelete: SetNull)
+
+  @@index([categorieId])
+  @@index([assureurId])
+  kitActeLignes KitActeLigne[]
+  feuilleLignes FeuilleCirculationLigne[]
+
+  @@map("actes")
+}
+
+model AssurancePatient {
+  id                BigInt    @id @default(autoincrement())
+  patientId         BigInt    @map("patient_id")
+  assuranceId       BigInt    @map("assurance_id")
+  dateDebut         DateTime? @map("date_debut") @db.Date
+  dateFin           DateTime? @map("date_fin") @db.Date
+  numeroAttestation String?   @map("numero_attestation")
+  tauxCouverture    Int       @default(0) @map("taux_couverture") @db.SmallInt
+  createdAt         DateTime? @map("created_at")
+  updatedAt         DateTime? @map("updated_at")
+
+  patient     Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  assurance   Assurance @relation(fields: [assuranceId], references: [id], onDelete: Cascade)
+  couvertures AssurancePatientCouverture[]
+
+  @@index([patientId])
+  @@index([assuranceId])
+  @@map("assurance_patient")
+}
+
+model AssurancePatientCouverture {
+  id                 BigInt    @id @default(autoincrement())
+  assurancePatientId BigInt    @map("assurance_patient_id")
+  categorieId        BigInt    @map("categorie_id")
+  tauxCouverture     Float     @map("taux_couverture")
+  createdAt          DateTime? @map("created_at")
+  updatedAt          DateTime? @map("updated_at")
+
+  assurancePatient AssurancePatient @relation(fields: [assurancePatientId], references: [id], onDelete: Cascade)
+  categorie        CategorieActe    @relation(fields: [categorieId], references: [id], onDelete: Cascade)
+
+  @@index([assurancePatientId])
+  @@index([categorieId])
+  @@map("assurance_patient_couvertures")
+}
+
+model AssuranceValeur {
+  id             BigInt    @id @default(autoincrement())
+  assuranceId    BigInt    @map("assurance_id")
+  codeBase       String    @map("code_base")
+  valeurUnitaire Float     @map("valeur_unitaire")
+  dateDebut      DateTime? @map("date_debut") @db.Date
+  dateFin        DateTime? @map("date_fin") @db.Date
+  createdAt      DateTime? @map("created_at")
+  updatedAt      DateTime? @map("updated_at")
+
+  assurance Assurance @relation(fields: [assuranceId], references: [id], onDelete: Cascade)
+
+  @@index([assuranceId])
+  @@map("assurance_valeurs")
+}
+
+model Parametre {
+  id                  BigInt    @id @default(autoincrement())
+  nomClinique         String?   @map("nom_clinique")
+  logo                String?
+  adresse             String?
+  telephone           String?
+  email               String?
+  numeroFactureDepart Int       @default(1) @map("numero_facture_depart")
+  numeroRecuDepart    Int       @default(1) @map("numero_recu_depart")
+  numeroVersementDepart Int     @default(1) @map("numero_versement_depart")
+  numeroAvoirDepart   Int       @default(1) @map("numero_avoir_depart")
+  niu                 String?
+  registreCommerce    String?   @map("registre_commerce")
+  noteBasPage1        String?   @map("note_bas_page_1") @db.Text
+  noteBasPage2        String?   @map("note_bas_page_2") @db.Text
+  /// Numéros WhatsApp des responsables recevant le rapport à chaque clôture de caisse
+  whatsappRapportCaisse1 String? @map("whatsapp_rapport_caisse_1") @db.VarChar(20)
+  whatsappRapportCaisse2 String? @map("whatsapp_rapport_caisse_2") @db.VarChar(20)
+  /// Matrice des permissions par rôle (JSON) — null = défauts applicatifs
+  rolePermissions     Json?     @map("role_permissions")
+  createdAt           DateTime? @map("created_at")
+  updatedAt           DateTime? @map("updated_at")
+
+  @@map("parametres")
+}
+
+/// Comptes applicatifs (héritage Laravel) — mots de passe re-hash côté seed.
+model User {
+  id              BigInt    @id @default(autoincrement())
+  name            String
+  email           String    @unique
+  code            String?   @db.VarChar(6)
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  password        String
+  telephone       String?   @db.VarChar(255)
+  photo           String?   @db.VarChar(255)
+  specialite      String?   @db.VarChar(255)
+  numeroOrdre     String?   @map("numero_ordre") @db.VarChar(255)
+  /// Valeur brute import (admin, medecins, front_office, etc.)
+  role            String?   @db.VarChar(255)
+  titre           String?   @db.VarChar(255)
+  actif           Boolean   @default(true)
+  rememberToken   String?   @map("remember_token") @db.VarChar(100)
+  createdAt       DateTime? @map("created_at")
+  updatedAt       DateTime? @map("updated_at")
+
+  visitesCreees   Visite[]  @relation("VisiteUser")
+  visitesTraitees Visite[]  @relation("VisiteMedecin")
+  kitActes        KitActe[]
+  feuillesCirculation  FeuilleCirculation[]
+  feuilleLignes        FeuilleCirculationLigne[]
+  avoirsFeuillesCreated AvoirFeuilleCirculation[] @relation("AvoirFeuilleCreateur")
+  avoirsFeuillesCancelled AvoirFeuilleCirculation[] @relation("AvoirFeuilleAnnulateur")
+  prescriptionsCreees  Prescription[]           @relation("PrescriptionUser")
+  prescriptionsMedecin Prescription[]           @relation("PrescriptionMedecin")
+  prescriptionLignes   PrescriptionLigne[]
+  wallets             Wallet[]
+  walletTransactions  WalletTransaction[]
+  factures            Facture[]
+  encaissements       Encaissement[]
+  journalCaisse       JournalCaisse[]
+  caisseSessions      CaisseSession[]
+  versementsCaisse    VersementCaisse[]
+  bordereauxCreated   BordereauAssureur[] @relation("BordereauCreateur")
+  bordereauxDeposes   BordereauAssureur[] @relation("BordereauDeposeur")
+  bordereauxPayes     BordereauAssureur[] @relation("BordereauPayeur")
+  /// Poste de caisse affecté (rôle caissier)
+  caissePosteId       BigInt?       @map("caisse_poste_id")
+  caissePoste         CaissePoste?  @relation(fields: [caissePosteId], references: [id], onDelete: SetNull)
+  /// Pharmacie affectée (rôle Pharmacie / Commis Pharmacie)
+  pharmacieId         BigInt?       @map("pharmacie_id")
+  pharmacie           Pharmacie?    @relation(fields: [pharmacieId], references: [id], onDelete: SetNull)
+  approvisionnements  Approvisionnement[] @relation("ApproCreateur")
+  approvisionnementsValides Approvisionnement[] @relation("ApproValidateur")
+  transfertsMagasin   TransfertMagasin[]
+  sortiesPharmacie    SortiePharmacie[]
+  retoursPharmacie    RetourPharmacie[]
+  mouvementsStock     MouvementStock[]
+  assurancesPromoteur Assurance[] @relation("AssurancePromoteur")
+  parametresPatient            ParametrePatient[]
+  antecedentsPatient           AntecedentPatient[]
+  observationsGynecologiques   ObservationGynecologique[]
+  observationsObstetricales    ObservationObstetricale[]
+  notificationRecipients       NotificationRecipient[]
+  notificationsActed           Notification[] @relation("NotificationActor")
+
+  @@map("users")
+}
+
+/// Motifs de consultation (référentiel — IDs hérités du dump Laravel)
+model Motif {
+  id        BigInt    @id @default(autoincrement())
+  libelle   String    @db.VarChar(255)
+  createdAt DateTime? @map("created_at")
+  updatedAt DateTime? @map("updated_at")
+
+  visites Visite[]
+
+  @@map("motifs")
+}
+
+/// Visites / consultations (dump Laravel — patientId sans FK : IDs legacy 8M+ non encore importés)
+model Visite {
+  id           BigInt    @id @default(autoincrement())
+  /// Référence patient (IDs legacy 8M+) — pas de FK Prisma tant que les patients ne sont pas importés aux mêmes IDs
+  patientId    BigInt    @map("patient_id")
+  motifId      BigInt    @map("motif_id")
+  userId       BigInt    @map("user_id")
+  medecinId    BigInt    @map("medecin_id")
+  dateVisite   DateTime  @map("date_visite")
+  commentaires String?   @db.Text
+  /// Statut workflow : EN_ATTENTE | EN_COURS | TERMINEE | FACTUREE
+  statut       String    @default("TERMINEE") @db.VarChar(30)
+  createdAt    DateTime? @map("created_at")
+  updatedAt    DateTime? @map("updated_at")
+
+  motif   Motif @relation(fields: [motifId], references: [id])
+  user    User  @relation("VisiteUser", fields: [userId], references: [id])
+  medecin User  @relation("VisiteMedecin", fields: [medecinId], references: [id])
+  feuillesCirculation FeuilleCirculation[]
+  prescriptions       Prescription[]
+  factures            Facture[]
+  parametrePatient              ParametrePatient?
+  antecedentPatient             AntecedentPatient?
+  observationGynecologique      ObservationGynecologique?
+  observationObstetricale      ObservationObstetricale?
+
+  @@index([patientId])
+  @@index([motifId])
+  @@index([userId])
+  @@index([medecinId])
+  @@index([dateVisite])
+  @@map("visites")
+}
+
+/// Constantes / paramètres cliniques saisis pour une visite (1 fiche max)
+model ParametrePatient {
+  id        BigInt @id @default(autoincrement())
+  visiteId  BigInt @unique @map("visite_id")
+  userId    BigInt @map("user_id")
+
+  /// Groupe Poids / Taille / IMC
+  poidsKg  Decimal @map("poids_kg") @db.Decimal(6, 2)
+  tailleCm Decimal @map("taille_cm") @db.Decimal(6, 1)
+  imc      Decimal @db.Decimal(5, 1)
+
+  /// Groupe PAS / PAD / Pouls / T°
+  pas           Int     @db.SmallInt
+  pad           Int     @db.SmallInt
+  pouls         Int     @db.SmallInt
+  temperatureC  Decimal @map("temperature_c") @db.Decimal(4, 1)
+
+  /// Bandelette urinaire (valeurs prédéfinies)
+  nitrite     String  @db.VarChar(30)
+  sang        String  @db.VarChar(30)
+  leucocytes  String  @db.VarChar(30)
+  proteine    String  @db.VarChar(30)
+  cetones     String  @db.VarChar(30)
+  ph          String  @db.VarChar(10)
+  sucre       String? @db.VarChar(30)
+
+  /// Groupe pédiatrique (âge < 15 ans)
+  perimetreCranien       Decimal? @map("perimetre_cranien") @db.Decimal(5, 1)
+  perimetreBrachial      Decimal? @map("perimetre_brachial") @db.Decimal(5, 1)
+  frequenceRespiratoire  Int?     @map("frequence_respiratoire") @db.SmallInt
+  sao2                   Int?     @db.SmallInt
+
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+
+  visite Visite @relation(fields: [visiteId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("parametres_patient")
+}
+
+/// Antécédents cliniques saisis pour une visite (1 fiche max)
+model AntecedentPatient {
+  id       BigInt @id @default(autoincrement())
+  visiteId BigInt @unique @map("visite_id")
+  userId   BigInt @map("user_id")
+
+  /// Mode de vie
+  situationMatrimoniale String?  @map("situation_matrimoniale") @db.VarChar(100)
+  nbrCigarJour          Int?     @map("nbr_cigar_jour")
+  nbrAnneeCigar         Int?     @map("nbr_annee_cigar")
+  alcool                String?  @db.VarChar(100)
+  drogue                String?  @db.VarChar(100)
+  activitePhysique      String?  @map("activite_physique") @db.VarChar(100)
+  poidsKg               Decimal? @map("poids_kg") @db.Decimal(6, 2)
+  tailleCm              Decimal? @map("taille_cm") @db.Decimal(6, 1)
+  tourTaille            String?  @map("tour_taille") @db.VarChar(50)
+  pointure              Int?
+  groupeSanguin         String?  @map("groupe_sanguin") @db.VarChar(50)
+  imc                   String?  @db.VarChar(20)
+  pa                    String?  @db.VarChar(20)
+
+  /// Familiaux
+  familDiabete       String? @map("famil_diabete") @db.VarChar(255)
+  familHta           String? @map("famil_hta") @db.VarChar(255)
+  familTrombo        String? @map("famil_trombo") @db.VarChar(255)
+  familCardioAvc     String? @map("famil_cardio_avc") @db.VarChar(255)
+  familDysthyroidie  String? @map("famil_dysthyroidie") @db.VarChar(255)
+  familCancer        String? @map("famil_cancer") @db.VarChar(255)
+  familAutres        String? @map("famil_autres") @db.VarChar(255)
+
+  /// Histoire vie génitale
+  menarches          String? @db.VarChar(100)
+  cyclesReguliers    String? @map("cycles_reguliers") @db.VarChar(50)
+  nbreJoursCycle     String? @map("nbre_jours_cycle") @db.VarChar(50)
+  nbreJoursRegles    String? @map("nbre_jours_regles") @db.VarChar(50)
+  nbreChanges        String? @map("nbre_changes") @db.VarChar(50)
+  menopause          String? @db.Text
+  traitMenopause     String? @map("trait_menopause") @db.Text
+  dernierFcv         String? @map("dernier_fcv") @db.VarChar(100)
+  derniereMammo      String? @map("derniere_mammo") @db.VarChar(100)
+
+  /// Médicaux
+  medHta           String? @map("med_hta") @db.VarChar(255)
+  medDiabete       String? @map("med_diabete") @db.VarChar(255)
+  medDyslipidemie  String? @map("med_dyslipidemie") @db.VarChar(255)
+  medNotes         String? @map("med_notes") @db.Text
+
+  /// Chirurgicaux
+  chirAppendicectomie String? @map("chir_appendicectomie") @db.VarChar(100)
+  chirPelvienne      String? @map("chir_pelvienne") @db.Text
+  chirNotes          String? @map("chir_notes") @db.Text
+
+  /// Allergies
+  allMedicaments     String? @map("all_medicaments") @db.Text
+  allRespiratoires   String? @map("all_respiratoires") @db.Text
+  allContact         String? @map("all_contact") @db.Text
+  allAlimentaires    String? @map("all_alimentaires") @db.Text
+
+  /// Transfusion
+  notesTransfusion   String? @map("notes_transfusion") @db.Text
+
+  /// Gynéco
+  gynGestite     String? @map("gyn_gestite") @db.VarChar(100)
+  gynParite      String? @map("gyn_parite") @db.VarChar(100)
+  gynIst         String? @map("gyn_ist") @db.VarChar(255)
+  gynConisation  String? @map("gyn_conisation") @db.VarChar(255)
+  gynKystes      String? @map("gyn_kystes") @db.VarChar(255)
+  gynMyomes      String? @map("gyn_myomes") @db.VarChar(255)
+  gynNotes       String? @map("gyn_notes") @db.Text
+
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+
+  visite Visite @relation(fields: [visiteId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("antecedents_patient")
+}
+
+/// Observation gynécologique saisie pour une visite (1 fiche max)
+model ObservationGynecologique {
+  id       BigInt @id @default(autoincrement())
+  visiteId BigInt @unique @map("visite_id")
+  userId   BigInt @map("user_id")
+
+  /// Motifs
+  typeConsult   String? @map("type_consult") @db.VarChar(100)
+  motifConsult  String? @map("motif_consult") @db.Text
+  ddr           String? @db.VarChar(50)
+  contraception String? @db.VarChar(255)
+  dernierFcv    String? @map("dernier_fcv") @db.VarChar(100)
+  derniereMammo String? @map("derniere_mammo") @db.VarChar(100)
+  menopause     String? @db.VarChar(255)
+  thm           String? @db.VarChar(255)
+  histMaladie   String? @map("hist_maladie") @db.Text
+
+  /// Interrogatoire
+  modeVieSexuelle String? @map("mode_vie_sexuelle") @db.VarChar(255)
+  menorragies     String? @db.VarChar(255)
+  metrorragies    String? @db.VarChar(255)
+  dysmenorrhees   String? @db.VarChar(255)
+  algiesPelviennes String? @map("algies_pelviennes") @db.VarChar(255)
+  dyspareunies    String? @db.VarChar(255)
+  prurit          String? @db.VarChar(255)
+  noteInterrogatoire String? @map("note_interrogatoire") @db.Text
+
+  /// Examen physique
+  seins              String? @db.VarChar(255)
+  inspection         String? @db.VarChar(255)
+  palpation          String? @db.VarChar(255)
+  eruptionGenitale   String? @map("eruption_genitale") @db.VarChar(255)
+  leucorrhees        String? @db.VarChar(255)
+  metrorragiesExam   String? @map("metrorragies_exam") @db.VarChar(255)
+  col                String? @db.VarChar(255)
+  vagin              String? @db.VarChar(255)
+  auscultation       String? @db.VarChar(255)
+  toucherVaginal     String? @map("toucher_vaginal") @db.VarChar(255)
+  culsSacLateraux    String? @map("culs_sac_lateraux") @db.VarChar(255)
+  culSacDouglas      String? @map("cul_sac_douglas") @db.VarChar(255)
+  notePhysique       String? @map("note_physique") @db.Text
+
+  /// Échographie
+  echoPelvienne String? @map("echo_pelvienne") @db.Text
+
+  /// Hypothèses diagnostiques
+  hypothese1 String? @map("hypothese_1") @db.Text
+  hypothese2 String? @map("hypothese_2") @db.Text
+  hypothese3 String? @map("hypothese_3") @db.Text
+
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+
+  visite Visite @relation(fields: [visiteId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("observations_gynecologiques")
+}
+
+/// Observation obstétricale saisie pour une visite (1 fiche max)
+model ObservationObstetricale {
+  id       BigInt @id @default(autoincrement())
+  visiteId BigInt @unique @map("visite_id")
+  userId   BigInt @map("user_id")
+
+  /// Motif de la consultation
+  typeObservation String? @map("type_observation") @db.VarChar(100)
+  motifConsult    String? @map("motif_consult") @db.Text
+  ddr             String? @db.VarChar(50)
+  dateDebutGrossesse String? @map("date_debut_grossesse") @db.VarChar(50)
+  histMaladie     String? @map("hist_maladie") @db.Text
+
+  /// Interrogatoire
+  mouvementsFoetaux   String? @map("mouvements_foetaux") @db.VarChar(255)
+  contractions        String? @db.VarChar(255)
+  ressentiesDouloureuses String? @map("ressenties_douloureuses") @db.VarChar(20)
+  endRessenties       String? @map("end_ressenties") @db.VarChar(20)
+  perteLiquideAmnio   String? @map("perte_liquide_amnio") @db.VarChar(20)
+  pruritVaginal       String? @map("prurit_vaginal") @db.VarChar(20)
+  pruritNu            String? @map("prurit_nu") @db.VarChar(20)
+  signesHta           String? @map("signes_hta") @db.VarChar(20)
+  glasgow             String? @db.VarChar(50)
+  cephalees           String? @db.VarChar(20)
+  endCephalees        String? @map("end_cephalees") @db.VarChar(20)
+  oedemesMi           String? @map("oedemes_mi") @db.VarChar(255)
+  oedemesMains        String? @map("oedemes_mains") @db.VarChar(255)
+  oedemesVisage       String? @map("oedemes_visage") @db.VarChar(255)
+  barreEpigastrique   String? @map("barre_epigastrique") @db.VarChar(255)
+  obnubilation        String? @db.VarChar(255)
+  troublesVigilance   String? @map("troubles_vigilance") @db.VarChar(255)
+  noteInterrogatoire  String? @map("note_interrogatoire") @db.Text
+
+  /// Examen physique
+  hauteurUterineCm       String? @map("hauteur_uterine_cm") @db.VarChar(50)
+  consistanceUterine     String? @map("consistance_uterine") @db.VarChar(255)
+  malformationUterine    String? @map("malformation_uterine") @db.VarChar(255)
+  speculum               String? @db.VarChar(255)
+  metrorragies           String? @db.VarChar(255)
+  perteLiquideTarnier    String? @map("perte_liquide_tarnier") @db.VarChar(255)
+  aspectLeucorrhees      String? @map("aspect_leucorrhees") @db.VarChar(255)
+  cdsLateraux            String? @map("cds_lateraux") @db.VarChar(255)
+
+  /// Toucher vaginal
+  col                String? @db.VarChar(255)
+  presentation       String? @db.VarChar(255)
+  cdsDouglas         String? @map("cds_douglas") @db.VarChar(255)
+  bishop             String? @db.VarChar(100)
+  noteToucherVaginal String? @map("note_toucher_vaginal") @db.Text
+
+  /// Écho obstétricale
+  echoObstetricale String? @map("echo_obstetricale") @db.Text
+
+  /// Hypothèses diagnostiques
+  hypothese1 String? @map("hypothese_1") @db.Text
+  hypothese2 String? @map("hypothese_2") @db.Text
+  hypothese3 String? @map("hypothese_3") @db.Text
+
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+
+  visite Visite @relation(fields: [visiteId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("observations_obstetricales")
+}
+
+/// Emballage (Boîte, Flacon…) — référentiel pharmacie
+model Conditionnement {
+  id        BigInt    @id @default(autoincrement())
+  libelle   String    @unique @db.VarChar(255)
+  isCommon  Boolean   @default(true) @map("is_common")
+  rank      Int       @default(100) @db.SmallInt
+  actif     Boolean   @default(true)
+  createdAt DateTime? @map("created_at")
+  updatedAt DateTime? @map("updated_at")
+
+  produits Produit[]
+
+  @@map("conditionnements")
+}
+
+/// Forme galénique (Comprimé, Sirop…) — référentiel pharmacie
+model FormeGalenique {
+  id        BigInt    @id @default(autoincrement())
+  libelle   String    @unique @db.VarChar(255)
+  isCommon  Boolean   @default(true) @map("is_common")
+  rank      Int       @default(100) @db.SmallInt
+  actif     Boolean   @default(true)
+  createdAt DateTime? @map("created_at")
+  updatedAt DateTime? @map("updated_at")
+
+  produits Produit[]
+
+  @@map("formes_galeniques")
+}
+
+/// Distributeurs / grossistes (pas de FK depuis produits dans le dump d’origine)
+model Fournisseur {
+  id           BigInt    @id @default(autoincrement())
+  raisonSociale String   @unique @map("raison_sociale") @db.VarChar(255)
+  adresse      String?   @db.VarChar(255)
+  telephone1   String?   @map("telephone1") @db.VarChar(255)
+  telephone2   String?   @map("telephone2") @db.VarChar(255)
+  email        String?   @db.VarChar(255)
+  actif        Boolean   @default(true)
+  createdAt    DateTime? @map("created_at")
+  updatedAt    DateTime? @map("updated_at")
+
+  approvisionnements Approvisionnement[]
+
+  @@map("fournisseurs")
+}
+
+/// Catalogue produits pharmacie (prix / stock d’alerte — données médico-économiques sensibles)
+model Produit {
+  id                      BigInt    @id @default(autoincrement())
+  nom                     String    @db.VarChar(255)
+  principeActif           String?   @map("principe_actif") @db.VarChar(255)
+  codeCip                 String?   @unique @map("code_cip") @db.VarChar(255)
+  formeGaleniqueId        BigInt    @map("forme_galenique_id")
+  dosage                  String    @db.VarChar(255)
+  conditionnementId       BigInt    @map("conditionnement_id")
+  qteParConditionnement   Int       @map("qte_par_conditionnement")
+  /// Prix d’achat de référence (tarification)
+  prixAchatRef            Decimal   @default(0) @map("prix_achat_ref") @db.Decimal(12, 2)
+  /// Prix de vente de référence
+  prixVenteRef            Decimal   @default(0) @map("prix_vente_ref") @db.Decimal(12, 2)
+  /// Honoraire non conventionné (prix libre hors convention)
+  hnc                     Decimal?  @db.Decimal(12, 2)
+  /// Seuil d’alerte rupture / réapprovisionnement
+  qteAlerte               Int       @default(0) @map("qte_alerte")
+  assureurId              BigInt?   @map("assureur_id")
+  /// Site pharmacie : CKS ou Plénitude
+  sitePharma              String    @default("CKS") @map("site_pharma") @db.VarChar(20)
+  actif                   Boolean   @default(true)
+  createdAt               DateTime? @map("created_at")
+  updatedAt               DateTime? @map("updated_at")
+
+  formeGalenique  FormeGalenique  @relation(fields: [formeGaleniqueId], references: [id], onDelete: Restrict)
+  conditionnement Conditionnement @relation(fields: [conditionnementId], references: [id], onDelete: Restrict)
+  assureur        Assurance?      @relation(fields: [assureurId], references: [id], onDelete: SetNull)
+
+  @@index([nom])
+  @@index([principeActif])
+  @@index([formeGaleniqueId])
+  @@index([conditionnementId])
+  @@index([assureurId])
+  kitActeLignes KitActeLigne[]
+  feuilleLignes      FeuilleCirculationLigne[]
+  prescriptionLignes PrescriptionLigne[]
+  stockLots          StockLot[]
+  approLignes   ApprovisionnementLigne[]
+  transfertLignes TransfertLigne[]
+  sortieLignes  SortiePharmacieLigne[]
+  retourLignes  RetourPharmacieLigne[]
+
+  @@map("produits")
+}
+
+/// Point de stock / site (référentiel magasins — aligné dump MySQL `magasins`)
+model Magasin {
+  id           BigInt    @id @default(autoincrement())
+  nom          String    @unique @db.VarChar(255)
+  emplacement  String?   @db.VarChar(255)
+  description  String?   @db.Text
+  actif        Boolean   @default(true)
+  createdAt    DateTime? @map("created_at")
+  updatedAt    DateTime? @map("updated_at")
+
+  pharmacie            Pharmacie?
+  stockLots            StockLot[]
+  approvisionnements   Approvisionnement[]
+  transfertsSource     TransfertMagasin[] @relation("TransfertSource")
+  transfertsDest       TransfertMagasin[] @relation("TransfertDest")
+  sortiesPharmacie     SortiePharmacie[]
+
+  @@map("magasins")
+}
+
+/// Officine / pharmacie opérationnelle (1 magasin de stock)
+model Pharmacie {
+  id        BigInt    @id @default(autoincrement())
+  nom       String    @db.VarChar(255)
+  magasinId BigInt    @unique @map("magasin_id")
+  actif     Boolean   @default(true)
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+
+  magasin Magasin @relation(fields: [magasinId], references: [id], onDelete: Restrict)
+  users   User[]
+  sorties SortiePharmacie[]
+  retours RetourPharmacie[]
+
+  @@map("pharmacies")
+}
+
+/// Stock par lot dans un magasin
+model StockLot {
+  id             BigInt    @id @default(autoincrement())
+  produitId      BigInt    @map("produit_id")
+  magasinId      BigInt    @map("magasin_id")
+  numeroLot      String    @map("numero_lot") @db.VarChar(100)
+  datePeremption DateTime  @map("date_peremption") @db.Date
+  quantite       Int       @default(0)
+  prixAchat      Decimal   @default(0) @map("prix_achat") @db.Decimal(12, 2)
+  createdAt      DateTime? @default(now()) @map("created_at")
+  updatedAt      DateTime? @updatedAt @map("updated_at")
+
+  produit    Produit          @relation(fields: [produitId], references: [id], onDelete: Restrict)
+  magasin    Magasin          @relation(fields: [magasinId], references: [id], onDelete: Restrict)
+  mouvements MouvementStock[]
+  transfertLignes TransfertLigne[]
+  sortieLignes    SortiePharmacieLigne[]
+  retourLignes    RetourPharmacieLigne[]
+
+  @@unique([produitId, magasinId, numeroLot])
+  @@index([magasinId])
+  @@index([produitId])
+  @@index([datePeremption])
+  @@map("stock_lots")
+}
+
+/// Traçabilité des mouvements de stock
+model MouvementStock {
+  id            BigInt    @id @default(autoincrement())
+  /// APPRO | TRANSFERT_OUT | TRANSFERT_IN | SORTIE | RETOUR
+  type          String    @db.VarChar(20)
+  stockLotId    BigInt    @map("stock_lot_id")
+  /// Quantité signée (+ entrée, − sortie)
+  quantite      Int
+  referenceType String?   @map("reference_type") @db.VarChar(50)
+  referenceId   BigInt?   @map("reference_id")
+  userId        BigInt    @map("user_id")
+  createdAt     DateTime? @default(now()) @map("created_at")
+
+  stockLot StockLot @relation(fields: [stockLotId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@index([stockLotId])
+  @@index([type])
+  @@index([referenceType, referenceId])
+  @@map("mouvements_stock")
+}
+
+model Approvisionnement {
+  id            BigInt    @id @default(autoincrement())
+  numero        String    @unique @db.VarChar(50)
+  magasinId     BigInt    @map("magasin_id")
+  fournisseurId BigInt?   @map("fournisseur_id")
+  userId        BigInt    @map("user_id")
+  /// BROUILLON | VALIDE
+  statut        String    @default("BROUILLON") @db.VarChar(20)
+  dateReception DateTime  @map("date_reception") @db.Date
+  note          String?   @db.Text
+  validatedAt   DateTime? @map("validated_at")
+  validatedById BigInt?   @map("validated_by_id")
+  createdAt     DateTime? @default(now()) @map("created_at")
+  updatedAt     DateTime? @updatedAt @map("updated_at")
+
+  magasin     Magasin                 @relation(fields: [magasinId], references: [id], onDelete: Restrict)
+  fournisseur Fournisseur?            @relation(fields: [fournisseurId], references: [id], onDelete: SetNull)
+  user        User                    @relation("ApproCreateur", fields: [userId], references: [id])
+  validatedBy User?                   @relation("ApproValidateur", fields: [validatedById], references: [id])
+  lignes      ApprovisionnementLigne[]
+
+  @@index([magasinId])
+  @@index([statut])
+  @@map("approvisionnements")
+}
+
+model ApprovisionnementLigne {
+  id                BigInt   @id @default(autoincrement())
+  approvisionnementId BigInt @map("approvisionnement_id")
+  /// Nullable en brouillon
+  produitId         BigInt?  @map("produit_id")
+  quantite          Int      @default(0)
+  numeroLot         String?  @map("numero_lot") @db.VarChar(100)
+  datePeremption    DateTime? @map("date_peremption") @db.Date
+  prixAchatUnitaire Decimal  @default(0) @map("prix_achat_unitaire") @db.Decimal(12, 2)
+
+  approvisionnement Approvisionnement @relation(fields: [approvisionnementId], references: [id], onDelete: Cascade)
+  produit           Produit?          @relation(fields: [produitId], references: [id], onDelete: Restrict)
+
+  @@index([approvisionnementId])
+  @@index([produitId])
+  @@map("approvisionnement_lignes")
+}
+
+model TransfertMagasin {
+  id              BigInt    @id @default(autoincrement())
+  numero          String    @unique @db.VarChar(50)
+  magasinSourceId BigInt    @map("magasin_source_id")
+  magasinDestId   BigInt    @map("magasin_dest_id")
+  userId          BigInt    @map("user_id")
+  /// EFFECTUE
+  statut          String    @default("EFFECTUE") @db.VarChar(20)
+  note            String?   @db.Text
+  createdAt       DateTime? @default(now()) @map("created_at")
+
+  magasinSource Magasin         @relation("TransfertSource", fields: [magasinSourceId], references: [id], onDelete: Restrict)
+  magasinDest   Magasin         @relation("TransfertDest", fields: [magasinDestId], references: [id], onDelete: Restrict)
+  user          User            @relation(fields: [userId], references: [id])
+  lignes        TransfertLigne[]
+
+  @@index([magasinSourceId])
+  @@index([magasinDestId])
+  @@map("transferts_magasin")
+}
+
+model TransfertLigne {
+  id             BigInt   @id @default(autoincrement())
+  transfertId    BigInt   @map("transfert_id")
+  produitId      BigInt   @map("produit_id")
+  stockLotId     BigInt   @map("stock_lot_id")
+  numeroLot      String   @map("numero_lot") @db.VarChar(100)
+  datePeremption DateTime @map("date_peremption") @db.Date
+  quantite       Int
+
+  transfert TransfertMagasin @relation(fields: [transfertId], references: [id], onDelete: Cascade)
+  produit   Produit          @relation(fields: [produitId], references: [id], onDelete: Restrict)
+  stockLot  StockLot         @relation(fields: [stockLotId], references: [id], onDelete: Restrict)
+
+  @@index([transfertId])
+  @@map("transfert_lignes")
+}
+
+model SortiePharmacie {
+  id             BigInt    @id @default(autoincrement())
+  numero         String    @unique @db.VarChar(50)
+  pharmacieId    BigInt    @map("pharmacie_id")
+  magasinId      BigInt    @map("magasin_id")
+  encaissementId BigInt?   @map("encaissement_id")
+  factureId      BigInt?   @map("facture_id")
+  patientId      BigInt    @map("patient_id")
+  userId         BigInt    @map("user_id")
+  /// PARTIELLE | COMPLETE
+  statut         String    @default("PARTIELLE") @db.VarChar(20)
+  createdAt      DateTime? @default(now()) @map("created_at")
+  updatedAt      DateTime? @updatedAt @map("updated_at")
+
+  pharmacie    Pharmacie              @relation(fields: [pharmacieId], references: [id], onDelete: Restrict)
+  magasin      Magasin                @relation(fields: [magasinId], references: [id], onDelete: Restrict)
+  encaissement Encaissement?          @relation(fields: [encaissementId], references: [id], onDelete: SetNull)
+  facture      Facture?               @relation(fields: [factureId], references: [id], onDelete: SetNull)
+  user         User                   @relation(fields: [userId], references: [id])
+  lignes       SortiePharmacieLigne[]
+  retours      RetourPharmacie[]
+
+  @@index([pharmacieId])
+  @@index([encaissementId])
+  @@index([factureId])
+  @@index([patientId])
+  @@map("sorties_pharmacie")
+}
+
+model SortiePharmacieLigne {
+  id                BigInt   @id @default(autoincrement())
+  sortieId          BigInt   @map("sortie_id")
+  produitId         BigInt   @map("produit_id")
+  quantiteDemandee  Int      @map("quantite_demandee")
+  quantiteServie    Int      @map("quantite_servie")
+  stockLotId        BigInt   @map("stock_lot_id")
+  numeroLot         String   @map("numero_lot") @db.VarChar(100)
+  datePeremption    DateTime @map("date_peremption") @db.Date
+  /// Snapshot part patient unitaire pour avoir au retour
+  montantPatientUnitaire Decimal @default(0) @map("montant_patient_unitaire") @db.Decimal(12, 2)
+
+  sortie   SortiePharmacie       @relation(fields: [sortieId], references: [id], onDelete: Cascade)
+  produit  Produit               @relation(fields: [produitId], references: [id], onDelete: Restrict)
+  stockLot StockLot              @relation(fields: [stockLotId], references: [id], onDelete: Restrict)
+  retours  RetourPharmacieLigne[]
+
+  @@index([sortieId])
+  @@index([produitId])
+  @@map("sortie_pharmacie_lignes")
+}
+
+model RetourPharmacie {
+  id          BigInt    @id @default(autoincrement())
+  numero      String    @unique @db.VarChar(50)
+  sortieId    BigInt    @map("sortie_id")
+  pharmacieId BigInt    @map("pharmacie_id")
+  userId      BigInt    @map("user_id")
+  patientId   BigInt    @map("patient_id")
+  montantAvoir Decimal  @default(0) @map("montant_avoir") @db.Decimal(12, 2)
+  motif       String?   @db.Text
+  createdAt   DateTime? @default(now()) @map("created_at")
+
+  sortie    SortiePharmacie       @relation(fields: [sortieId], references: [id], onDelete: Restrict)
+  pharmacie Pharmacie             @relation(fields: [pharmacieId], references: [id], onDelete: Restrict)
+  user      User                  @relation(fields: [userId], references: [id])
+  lignes    RetourPharmacieLigne[]
+
+  @@index([sortieId])
+  @@index([pharmacieId])
+  @@map("retours_pharmacie")
+}
+
+model RetourPharmacieLigne {
+  id            BigInt @id @default(autoincrement())
+  retourId      BigInt @map("retour_id")
+  sortieLigneId BigInt @map("sortie_ligne_id")
+  produitId     BigInt @map("produit_id")
+  stockLotId    BigInt @map("stock_lot_id")
+  quantite      Int
+
+  retour      RetourPharmacie     @relation(fields: [retourId], references: [id], onDelete: Cascade)
+  sortieLigne SortiePharmacieLigne @relation(fields: [sortieLigneId], references: [id], onDelete: Restrict)
+  produit     Produit             @relation(fields: [produitId], references: [id], onDelete: Restrict)
+  stockLot    StockLot            @relation(fields: [stockLotId], references: [id], onDelete: Restrict)
+
+  @@index([retourId])
+  @@map("retour_pharmacie_lignes")
+}
+
+/// Kit prédéfini : actes médicaux + lignes pharmacie (parcours hospitalier)
+model KitActe {
+  id          BigInt    @id @default(autoincrement())
+  nom         String    @unique @db.VarChar(255)
+  description String?   @db.Text
+  userId      BigInt    @map("user_id")
+  actif       Boolean   @default(true)
+  createdAt   DateTime? @map("created_at")
+  updatedAt   DateTime? @map("updated_at")
+
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lignes KitActeLigne[]
+
+  @@index([userId])
+  @@index([actif])
+  @@map("kit_actes")
+}
+
+/// Ligne de kit : acte facturable ou produit pharmacie (quantités / remise)
+model KitActeLigne {
+  id             BigInt    @id @default(autoincrement())
+  kitActeId      BigInt    @map("kit_acte_id")
+  /// ACTE | PHARMA — aligné dump MySQL
+  typeLigne      String    @map("type_ligne") @db.VarChar(10)
+  acteId         BigInt?   @map("acte_id")
+  quantite       Int       @default(1)
+  produitId      BigInt?   @map("produit_id")
+  remiseUnitaire Decimal   @default(0) @map("remise_unitaire") @db.Decimal(10, 2)
+  position       Int       @default(0)
+  createdAt      DateTime? @map("created_at")
+  updatedAt      DateTime? @map("updated_at")
+
+  kitActe KitActe  @relation(fields: [kitActeId], references: [id], onDelete: Cascade)
+  acte    Acte?    @relation(fields: [acteId], references: [id], onDelete: SetNull)
+  produit Produit? @relation(fields: [produitId], references: [id], onDelete: SetNull)
+
+  @@index([kitActeId])
+  @@index([typeLigne])
+  @@index([acteId])
+  @@index([produitId])
+  @@map("kit_acte_lignes")
+}
+
+/// Feuille de circulation : en-tête du parcours facturable d'une visite (ex-`categorie_acte_realises` Laravel)
+model FeuilleCirculation {
+  id          BigInt    @id @default(autoincrement())
+  visiteId    BigInt    @map("visite_id")
+  numero      String    @unique @db.VarChar(50)
+  libelle     String?   @db.VarChar(255)
+  /// BROUILLON (modifiable) | CONFIRMEE (verrouillée)
+  statut          String    @default("BROUILLON") @db.VarChar(20)
+  /// IMPAYEE | PAYEE
+  statutPaiement  String    @default("IMPAYEE") @map("statut_paiement") @db.VarChar(20)
+  paidAt          DateTime? @map("paid_at")
+  userId          BigInt    @map("user_id")
+  confirmedAt DateTime? @map("confirmed_at")
+  createdAt   DateTime? @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+
+  visite Visite @relation(fields: [visiteId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+  lignes FeuilleCirculationLigne[]
+  factureLiens FactureFeuille[]
+  encaissements Encaissement[]
+  avoir AvoirFeuilleCirculation?
+
+  @@index([visiteId])
+  @@index([statut])
+  @@index([statutPaiement])
+  @@map("feuilles_circulation")
+}
+
+/// Avoir comptable sur part patient d'une feuille de circulation impayée (annulation de dette, sans wallet).
+model AvoirFeuilleCirculation {
+  id            BigInt    @id @default(autoincrement())
+  numero        String    @unique @db.VarChar(50)
+  feuilleId     BigInt    @unique @map("feuille_id")
+  montant       Decimal   @db.Decimal(12, 2)
+  motif         String    @db.Text
+  /// ACTIF | ANNULE
+  statut        String    @default("ACTIF") @db.VarChar(20)
+  userId        BigInt    @map("user_id")
+  cancelledAt   DateTime? @map("cancelled_at")
+  cancelledById BigInt?   @map("cancelled_by_id")
+  createdAt     DateTime? @default(now()) @map("created_at")
+  updatedAt     DateTime? @updatedAt @map("updated_at")
+
+  feuille     FeuilleCirculation @relation(fields: [feuilleId], references: [id], onDelete: Cascade)
+  user        User               @relation("AvoirFeuilleCreateur", fields: [userId], references: [id])
+  cancelledBy User?              @relation("AvoirFeuilleAnnulateur", fields: [cancelledById], references: [id], onDelete: SetNull)
+
+  @@index([statut])
+  @@map("avoirs_feuilles_circulation")
+}
+
+/// Ligne de feuille de circulation : acte facturable ou produit pharmacie, avec snapshots de valorisation (ex-`acte_realises` Laravel)
+model FeuilleCirculationLigne {
+  id         BigInt @id @default(autoincrement())
+  feuilleId  BigInt @map("feuille_id")
+  /// ACTE | PHARMA
+  typeLigne  String @map("type_ligne") @db.VarChar(10)
+  categorieId BigInt @map("categorie_id")
+  acteId     BigInt? @map("acte_id")
+  produitId  BigInt? @map("produit_id")
+  quantite   Int     @default(1)
+  /// Taux de couverture appliqué (snapshot, %)
+  taux       Int     @default(0) @db.SmallInt
+  /// Valeur unitaire nette (point acte valorisé, ou PU net pharma)
+  valeur     Decimal @default(0) @db.Decimal(12, 2)
+  /// Honoraire non conventionné unitaire
+  hnc        Decimal @default(0) @db.Decimal(12, 2)
+  /// Snapshots pharma : prix de vente unitaire et remise unitaire au moment de la saisie
+  puSnapshot     Decimal? @map("pu_snapshot") @db.Decimal(12, 2)
+  remiseUnitaire Decimal? @map("remise_unitaire") @db.Decimal(12, 2)
+  montantTotal     Decimal @default(0) @map("montant_total") @db.Decimal(12, 2)
+  montantAssurance Decimal @default(0) @map("montant_assurance") @db.Decimal(12, 2)
+  montantPatient   Decimal @default(0) @map("montant_patient") @db.Decimal(12, 2)
+  /// Snapshot de l'imputation assurance de l'acte (0/1)
+  imputeAssurance Int?    @map("impute_assurance") @db.SmallInt
+  position   Int     @default(0)
+  userId     BigInt  @map("user_id")
+  createdAt  DateTime? @default(now()) @map("created_at")
+
+  feuille   FeuilleCirculation @relation(fields: [feuilleId], references: [id], onDelete: Cascade)
+  categorie CategorieActe      @relation(fields: [categorieId], references: [id])
+  acte      Acte?              @relation(fields: [acteId], references: [id], onDelete: SetNull)
+  produit   Produit?           @relation(fields: [produitId], references: [id], onDelete: SetNull)
+  user      User               @relation(fields: [userId], references: [id])
+
+  @@index([feuilleId])
+  @@index([typeLigne])
+  @@index([categorieId])
+  @@index([acteId])
+  @@index([produitId])
+  @@map("feuille_circulation_lignes")
+}
+
+/// Prescription médicale (produits pharmacie uniquement), parallèle aux feuilles de circulation.
+model Prescription {
+  id             BigInt    @id @default(autoincrement())
+  visiteId       BigInt    @map("visite_id")
+  numero         String    @unique @db.VarChar(50)
+  libelle        String?   @db.VarChar(255)
+  /// BROUILLON (modifiable) | CONFIRMEE (verrouillée)
+  statut         String    @default("BROUILLON") @db.VarChar(20)
+  /// IMPAYEE | PAYEE
+  statutPaiement String    @default("IMPAYEE") @map("statut_paiement") @db.VarChar(20)
+  medecinId      BigInt    @map("medecin_id")
+  userId         BigInt    @map("user_id")
+  confirmedAt    DateTime? @map("confirmed_at")
+  paidAt         DateTime? @map("paid_at")
+  createdAt      DateTime? @default(now()) @map("created_at")
+  updatedAt      DateTime? @updatedAt @map("updated_at")
+
+  visite        Visite               @relation(fields: [visiteId], references: [id], onDelete: Cascade)
+  medecin       User                 @relation("PrescriptionMedecin", fields: [medecinId], references: [id])
+  user          User                 @relation("PrescriptionUser", fields: [userId], references: [id])
+  lignes        PrescriptionLigne[]
+  encaissements Encaissement[]
+
+  @@index([visiteId])
+  @@index([medecinId])
+  @@index([statut])
+  @@index([statutPaiement])
+  @@map("prescriptions")
+}
+
+model PrescriptionLigne {
+  id               BigInt    @id @default(autoincrement())
+  prescriptionId   BigInt    @map("prescription_id")
+  categorieId      BigInt    @map("categorie_id")
+  produitId        BigInt    @map("produit_id")
+  quantite         Int       @default(1)
+  taux             Int       @default(0) @db.SmallInt
+  valeur           Decimal   @default(0) @db.Decimal(12, 2)
+  hnc              Decimal   @default(0) @db.Decimal(12, 2)
+  puSnapshot       Decimal?  @map("pu_snapshot") @db.Decimal(12, 2)
+  remiseUnitaire   Decimal?  @map("remise_unitaire") @db.Decimal(12, 2)
+  montantTotal     Decimal   @default(0) @map("montant_total") @db.Decimal(12, 2)
+  montantAssurance Decimal   @default(0) @map("montant_assurance") @db.Decimal(12, 2)
+  montantPatient   Decimal   @default(0) @map("montant_patient") @db.Decimal(12, 2)
+  position         Int       @default(0)
+  userId           BigInt    @map("user_id")
+  createdAt        DateTime? @default(now()) @map("created_at")
+
+  prescription Prescription  @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  categorie    CategorieActe @relation(fields: [categorieId], references: [id])
+  produit      Produit       @relation(fields: [produitId], references: [id], onDelete: Restrict)
+  user         User          @relation(fields: [userId], references: [id])
+
+  @@index([prescriptionId])
+  @@index([categorieId])
+  @@index([produitId])
+  @@map("prescription_lignes")
+}
+
+/// Portemonnaie patient (1 par patient — solde = somme des transactions)
+model Wallet {
+  id        BigInt    @id @default(autoincrement())
+  patientId BigInt    @unique @map("patient_id")
+  userId    BigInt?   @map("user_id")
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @updatedAt @map("updated_at")
+
+  patient      Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  user         User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  transactions WalletTransaction[]
+
+  @@map("wallets")
+}
+
+/// Mouvement portemonnaie (recharge, paiement, annulation, reservation)
+model WalletTransaction {
+  id                  BigInt    @id @default(autoincrement())
+  walletId            BigInt    @map("wallet_id")
+  type                String    @db.VarChar(20)
+  montant             Decimal   @db.Decimal(12, 2)
+  /// ESPECES | MOBILE_MONEY (recharges uniquement)
+  modePaiement        String?   @map("mode_paiement") @db.VarChar(20)
+  description         String?
+  transactionableType String?   @map("transactionable_type") @db.VarChar(255)
+  transactionableId   BigInt?   @map("transactionable_id")
+  userId              BigInt?   @map("user_id")
+  sessionId           BigInt?   @map("session_id")
+  createdAt           DateTime? @default(now()) @map("created_at")
+  updatedAt           DateTime? @updatedAt @map("updated_at")
+
+  wallet  Wallet         @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user    User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  session CaisseSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  encaissement Encaissement?
+
+  @@index([walletId])
+  @@index([sessionId])
+  @@index([transactionableType, transactionableId])
+  @@map("wallet_transactions")
+}
+
+/// Facture groupée : plusieurs feuilles confirmées d'une même visite
+model Facture {
+  id               BigInt    @id @default(autoincrement())
+  numero           String    @unique @db.VarChar(50)
+  visiteId         BigInt    @map("visite_id")
+  patientId        BigInt    @map("patient_id")
+  /// Snapshot assureur actif à la date de visite (hors « Non assuré »)
+  assuranceId      BigInt?   @map("assurance_id")
+  /// BROUILLON | CONFIRMEE | PAYEE
+  statut           String    @default("BROUILLON") @db.VarChar(20)
+  montantPatient   Decimal   @default(0) @map("montant_patient") @db.Decimal(12, 2)
+  montantAssurance Decimal   @default(0) @map("montant_assurance") @db.Decimal(12, 2)
+  confirmedAt      DateTime? @map("confirmed_at")
+  paidAt           DateTime? @map("paid_at")
+  userId           BigInt    @map("user_id")
+  createdAt        DateTime? @default(now()) @map("created_at")
+  updatedAt        DateTime? @updatedAt @map("updated_at")
+
+  visite          Visite           @relation(fields: [visiteId], references: [id], onDelete: Cascade)
+  user            User             @relation(fields: [userId], references: [id])
+  assurance       Assurance?       @relation(fields: [assuranceId], references: [id], onDelete: SetNull)
+  feuilles        FactureFeuille[]
+  encaissements   Encaissement[]
+  bordereauFacture BordereauFacture?
+  sortiesPharmacie SortiePharmacie[]
+
+  @@index([visiteId])
+  @@index([patientId])
+  @@index([statut])
+  @@index([assuranceId])
+  @@map("factures")
+}
+
+/// Bordereau de dépôt des parts assureur (1 assureur par bordereau)
+model BordereauAssureur {
+  id           BigInt    @id @default(autoincrement())
+  numero       String    @unique @db.VarChar(50)
+  assuranceId  BigInt    @map("assurance_id")
+  /// BROUILLON | DEPOSE | PAYE
+  statut       String    @default("BROUILLON") @db.VarChar(20)
+  montantTotal Decimal   @default(0) @map("montant_total") @db.Decimal(12, 2)
+  dateDepot    DateTime? @map("date_depot") @db.Date
+  noteDepot    String?   @map("note_depot") @db.Text
+  datePaiement DateTime? @map("date_paiement") @db.Date
+  refVirement  String?   @map("ref_virement") @db.VarChar(100)
+  userId       BigInt    @map("user_id")
+  deposeParId  BigInt?   @map("depose_par_id")
+  payeParId    BigInt?   @map("paye_par_id")
+  createdAt    DateTime? @default(now()) @map("created_at")
+  updatedAt    DateTime? @updatedAt @map("updated_at")
+
+  assurance Assurance          @relation(fields: [assuranceId], references: [id], onDelete: Restrict)
+  user      User               @relation("BordereauCreateur", fields: [userId], references: [id])
+  deposePar User?              @relation("BordereauDeposeur", fields: [deposeParId], references: [id])
+  payePar   User?              @relation("BordereauPayeur", fields: [payeParId], references: [id])
+  factures  BordereauFacture[]
+
+  @@index([assuranceId])
+  @@index([statut])
+  @@map("bordereaux_assureurs")
+}
+
+model BordereauFacture {
+  bordereauId      BigInt  @map("bordereau_id")
+  factureId        BigInt  @unique @map("facture_id")
+  montantAssurance Decimal @map("montant_assurance") @db.Decimal(12, 2)
+
+  bordereau BordereauAssureur @relation(fields: [bordereauId], references: [id], onDelete: Cascade)
+  facture   Facture           @relation(fields: [factureId], references: [id], onDelete: Restrict)
+
+  @@id([bordereauId, factureId])
+  @@map("bordereau_factures")
+}
+
+model FactureFeuille {
+  factureId            BigInt @map("facture_id")
+  feuilleCirculationId BigInt @unique @map("feuille_circulation_id")
+
+  facture Facture            @relation(fields: [factureId], references: [id], onDelete: Cascade)
+  feuille FeuilleCirculation @relation(fields: [feuilleCirculationId], references: [id], onDelete: Cascade)
+
+  @@id([factureId, feuilleCirculationId])
+  @@map("facture_feuilles")
+}
+
+/// Reçu de caisse (encaissement portemonnaie)
+model Encaissement {
+  id                  BigInt    @id @default(autoincrement())
+  numero              String    @unique @db.VarChar(50)
+  /// FEUILLE | FACTURE | PRESCRIPTION
+  type                String    @db.VarChar(20)
+  feuilleId           BigInt?   @unique @map("feuille_id")
+  factureId           BigInt?   @unique @map("facture_id")
+  prescriptionId      BigInt?   @unique @map("prescription_id")
+  patientId           BigInt    @map("patient_id")
+  montant             Decimal   @db.Decimal(12, 2)
+  walletTransactionId BigInt    @unique @map("wallet_transaction_id")
+  sessionId           BigInt?   @map("session_id")
+  userId              BigInt    @map("user_id")
+  createdAt           DateTime? @default(now()) @map("created_at")
+
+  feuille             FeuilleCirculation? @relation(fields: [feuilleId], references: [id], onDelete: SetNull)
+  facture             Facture?            @relation(fields: [factureId], references: [id], onDelete: SetNull)
+  prescription        Prescription?       @relation(fields: [prescriptionId], references: [id], onDelete: SetNull)
+  walletTransaction   WalletTransaction   @relation(fields: [walletTransactionId], references: [id], onDelete: Cascade)
+  user                User                @relation(fields: [userId], references: [id])
+  session             CaisseSession?      @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  journalCaisse JournalCaisse?
+  sortiesPharmacie SortiePharmacie[]
+
+  @@index([patientId])
+  @@index([sessionId])
+  @@index([createdAt])
+  @@map("encaissements")
+}
+
+/// Poste de caisse physique (config admin)
+model CaissePoste {
+  id          BigInt    @id @default(autoincrement())
+  nom         String    @unique @db.VarChar(100)
+  description String?   @db.VarChar(255)
+  actif       Boolean   @default(true)
+  createdAt   DateTime? @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+
+  sessions CaisseSession[]
+  users    User[]
+
+  @@map("caisse_postes")
+}
+
+/// Session journalière de caisse par caissier
+model CaisseSession {
+  id                    BigInt    @id @default(autoincrement())
+  posteId               BigInt    @map("poste_id")
+  userId                BigInt    @map("user_id")
+  /// OUVERTE | FERMEE
+  statut                String    @db.VarChar(20)
+  soldeOuverture        Decimal   @map("solde_ouverture") @db.Decimal(12, 2)
+  soldeTheoriqueCloture Decimal?  @map("solde_theorique_cloture") @db.Decimal(12, 2)
+  soldeReelCloture      Decimal?  @map("solde_reel_cloture") @db.Decimal(12, 2)
+  ecart                 Decimal?  @db.Decimal(12, 2)
+  commentaireEcart      String?   @map("commentaire_ecart") @db.VarChar(500)
+  openedAt              DateTime  @default(now()) @map("opened_at")
+  closedAt              DateTime? @map("closed_at")
+  createdAt             DateTime? @default(now()) @map("created_at")
+  updatedAt             DateTime? @updatedAt @map("updated_at")
+
+  poste             CaissePoste         @relation(fields: [posteId], references: [id])
+  user              User                @relation(fields: [userId], references: [id])
+  journal           JournalCaisse[]
+  encaissements     Encaissement[]
+  walletTransactions WalletTransaction[]
+  versements        VersementCaisse[]
+
+  @@index([posteId, statut])
+  @@index([userId, statut])
+  @@index([openedAt])
+  @@map("caisse_sessions")
+}
+
+/// Versement sortant (banque, promoteurs, etc.)
+model VersementCaisse {
+  id           BigInt    @id @default(autoincrement())
+  sessionId    BigInt    @map("session_id")
+  numero       String    @unique @db.VarChar(50)
+  montant      Decimal   @db.Decimal(12, 2)
+  libelle      String    @db.VarChar(500)
+  beneficiaire String?   @db.VarChar(255)
+  userId       BigInt    @map("user_id")
+  createdAt    DateTime? @default(now()) @map("created_at")
+
+  session CaisseSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id])
+  journal JournalCaisse?
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@map("versements_caisse")
+}
+
+/// Journal de caisse — trace chaque encaissement et décaissement
+model JournalCaisse {
+  id            BigInt    @id @default(autoincrement())
+  /// ENCAISSEMENT | DECAISSEMENT
+  sens          String    @db.VarChar(20)
+  montant       Decimal   @db.Decimal(12, 2)
+  /// ESPECES | MOBILE_MONEY | PORTEFEUILLE
+  modePaiement  String?   @map("mode_paiement") @db.VarChar(20)
+  libelle       String    @db.VarChar(500)
+  patientId     BigInt?   @map("patient_id")
+  /// WalletTransaction | Encaissement
+  referenceType String?   @map("reference_type") @db.VarChar(50)
+  referenceId   BigInt?   @map("reference_id")
+  encaissementId BigInt?  @unique @map("encaissement_id")
+  versementId    BigInt?  @unique @map("versement_id")
+  sessionId      BigInt?  @map("session_id")
+  userId        BigInt    @map("user_id")
+  createdAt     DateTime? @default(now()) @map("created_at")
+
+  encaissement Encaissement?  @relation(fields: [encaissementId], references: [id], onDelete: SetNull)
+  versement    VersementCaisse? @relation(fields: [versementId], references: [id], onDelete: SetNull)
+  session      CaisseSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  user         User          @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([sens])
+  @@index([patientId])
+  @@index([sessionId])
+  @@map("journal_caisse")
+}
+
+/// Journal des notifications WhatsApp envoyées aux patients
+model WhatsAppNotificationLog {
+  id               BigInt    @id @default(autoincrement())
+  eventType        String    @map("event_type") @db.VarChar(40)
+  status           String    @db.VarChar(20)
+  patientId        BigInt?   @map("patient_id")
+  phone            String    @db.VarChar(20)
+  referenceType    String?   @map("reference_type") @db.VarChar(50)
+  referenceId      BigInt?   @map("reference_id")
+  messagePreview   String?   @map("message_preview") @db.VarChar(500)
+  errorMessage     String?   @map("error_message") @db.Text
+  wasenderResponse Json?     @map("wasender_response")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([eventType, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("whatsapp_notification_logs")
+}
+
+/// Notification in-app (événement métier)
+model Notification {
+  id          BigInt   @id @default(autoincrement())
+  /// VISITE_CREEE | PATIENT_CREE | FACTURE_CONFIRMEE | FACTURE_PAYEE | FEUILLE_PAYEE | BORDEREAU_DEPOSE | BORDEREAU_PAYE
+  type        String   @db.VarChar(40)
+  message     String   @db.VarChar(500)
+  href        String?  @db.VarChar(255)
+  entityType  String?  @map("entity_type") @db.VarChar(50)
+  entityId    BigInt?  @map("entity_id")
+  actorUserId BigInt?  @map("actor_user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  actor      User?                    @relation("NotificationActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  recipients NotificationRecipient[]
+
+  @@index([createdAt])
+  @@index([type, createdAt])
+  @@map("notifications")
+}
+
+/// Destinataire d'une notification (lu / non lu par utilisateur)
+model NotificationRecipient {
+  id             BigInt    @id @default(autoincrement())
+  notificationId BigInt    @map("notification_id")
+  userId         BigInt    @map("user_id")
+  readAt         DateTime? @map("read_at")
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, userId])
+  @@index([userId, readAt])
+  @@index([userId, notificationId])
+  @@map("notification_recipients")
+}
