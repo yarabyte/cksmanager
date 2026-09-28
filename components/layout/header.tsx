@@ -61,7 +61,9 @@ export function Header({ onMenuClick, sidebarCollapsed, user }: HeaderProps) {
   const { theme, setTheme } = useTheme()
   const isMobile = useIsMobile()
   const [mounted, setMounted] = React.useState(false)
-  const roleConfig = getRoleConfig(user.role)
+  const roleConfig = user.customGroup
+    ? { label: user.customGroup.label, className: "bg-slate-100 text-slate-700 border border-slate-200" }
+    : getRoleConfig(user.role)
   const initials = getInitials(user.firstName, user.lastName)
 
   const { data: notifData, isPending: notifLoading } = useRecentNotifications()

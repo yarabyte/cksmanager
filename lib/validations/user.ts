@@ -22,6 +22,8 @@ export const userUpdateSchema = z.object({
   role: z.string().nullable().optional(),
   /** Tokens legacy (ex. caisse, pharmacie). */
   roles: z.array(legacyRoleToken).optional(),
+  /** Id d'un groupe personnalisé (exclusif de `roles`). */
+  customGroupId: z.string().nullable().optional(),
   actif: z.boolean(),
   caissePosteId: z.string().regex(/^\d+$/).nullable().optional(),
   pharmacieId: z.string().regex(/^\d+$/).nullable().optional(),

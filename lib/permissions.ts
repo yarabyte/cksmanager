@@ -15,6 +15,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     dashboard: ["view"],
     patients: ["view", "create", "edit", "delete"],
     visites: ["view", "create", "edit", "delete"],
+    feuilleCirculation: ["view", "create", "edit", "delete"],
     prescriptions: ["view", "create", "edit", "delete"],
     facturation: ["view", "create", "edit", "delete"],
     pharmacie: ["view", "create", "edit", "delete"],
@@ -25,6 +26,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     dashboard: ["view"],
     patients: ["view", "create", "edit"],
     visites: ["view", "create", "edit"],
+    feuilleCirculation: ["view", "create", "edit"],
     prescriptions: ["view", "create", "edit"],
     facturation: ["view", "create", "edit"],
     pharmacie: ["view", "create", "edit"],
@@ -35,6 +37,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     dashboard: ["view"],
     patients: ["view", "edit"],
     visites: ["view", "create", "edit"],
+    feuilleCirculation: [],
     prescriptions: ["view", "create", "edit"],
     facturation: ["view"],
     pharmacie: ["view"],
@@ -45,6 +48,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     dashboard: ["view"],
     patients: ["view", "create", "edit"],
     visites: ["view", "create"],
+    feuilleCirculation: [],
     prescriptions: [],
     facturation: ["view"],
     pharmacie: [],
@@ -55,6 +59,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     dashboard: ["view"],
     patients: ["view"],
     visites: ["view"],
+    feuilleCirculation: [],
     prescriptions: ["view"],
     facturation: ["view", "create", "edit"],
     pharmacie: [],
@@ -65,6 +70,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     dashboard: ["view"],
     patients: ["view"],
     visites: ["view"],
+    feuilleCirculation: [],
     prescriptions: ["view"],
     facturation: [],
     pharmacie: ["view", "create", "edit"],
@@ -75,6 +81,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     dashboard: ["view"],
     patients: ["view"],
     visites: [],
+    feuilleCirculation: [],
     prescriptions: ["view"],
     facturation: ["view"],
     pharmacie: ["view", "create", "edit"],
@@ -136,11 +143,9 @@ export function getAccessibleModulesFromMatrix(
   return ALL_MODULES.filter((mod) => canAccessModuleWithMatrix(matrix, role, mod))
 }
 
-export function countRolePermissionsFromMatrix(
-  matrix: PermissionMatrix,
-  role: Role,
+export function countModulePermissions(
+  perms: Record<Module, Action[]>,
 ): { moduleCount: number; actionCount: number } {
-  const perms = getPermissionsForRoleFromMatrix(matrix, role)
   let actionCount = 0
   let moduleCount = 0
   for (const mod of ALL_MODULES) {
@@ -151,6 +156,13 @@ export function countRolePermissionsFromMatrix(
     }
   }
   return { moduleCount, actionCount }
+}
+
+export function countRolePermissionsFromMatrix(
+  matrix: PermissionMatrix,
+  role: Role,
+): { moduleCount: number; actionCount: number } {
+  return countModulePermissions(getPermissionsForRoleFromMatrix(matrix, role))
 }
 
 export function countRolePermissions(role: Role): {

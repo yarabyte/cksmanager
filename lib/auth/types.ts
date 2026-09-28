@@ -1,4 +1,4 @@
-import type { Role } from '@/lib/types'
+import type { CustomGroup, Role } from '@/lib/types'
 
 export type AuthUser = {
   id: bigint
@@ -9,6 +9,8 @@ export type AuthUser = {
   /** Tous les rôles de l’utilisateur. */
   roles: Role[]
   legacyRole: string | null
+  /** Défini si le compte appartient à un groupe personnalisé plutôt qu'à un rôle fixe. */
+  customGroup?: CustomGroup | null
 }
 
 export type SessionPayload = {
@@ -27,6 +29,7 @@ export type SidebarUser = {
   email: string
   role: Role
   roles: Role[]
+  customGroup?: { id: string; label: string; pages: string[] } | null
 }
 
 export function splitUserName(name: string): { firstName: string; lastName: string } {
@@ -48,5 +51,8 @@ export function toSidebarUser(user: AuthUser): SidebarUser {
     email: user.email,
     role: user.role,
     roles: user.roles,
+    customGroup: user.customGroup
+      ? { id: user.customGroup.id, label: user.customGroup.label, pages: user.customGroup.pages }
+      : null,
   }
 }

@@ -66,7 +66,11 @@ import {
   Baby,
 } from "lucide-react"
 import type { SidebarUser } from "@/lib/auth/types"
-import { getNavigationForRoles } from "@/lib/navigation"
+import {
+  getNavigationForRoles,
+  filterNavGroupsByPermissions,
+  getNavigationForCustomGroup,
+} from "@/lib/navigation"
 import { getRoleConfig, getInitials } from "@/lib/formatting"
 import { canValiderSortie } from "@/lib/pharmacie/roles"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -74,6 +78,7 @@ import { useSortiesNavCount } from "@/hooks/use-sorties-nav"
 import { useSalleAttenteNavCount } from "@/hooks/use-parametres-patient"
 import { useVisiteNavCount } from "@/hooks/use-visites"
 import type { NavGroup, NavItem } from "@/lib/types"
+import type { PermissionMatrix } from "@/lib/permissions-matrix"
 
 interface SidebarProps {
   collapsed: boolean
@@ -81,6 +86,7 @@ interface SidebarProps {
   mobileOpen: boolean
   onMobileOpenChange: (open: boolean) => void
   user: SidebarUser
+  permissionMatrix: PermissionMatrix
 }
 
 function withNavBadges(
@@ -335,15 +341,17 @@ function SidebarNavItem({
 }
 
 function SidebarContent({
-  collapsed, 
+  collapsed,
   onCollapsedChange,
   onItemClick,
   user,
-}: { 
+  permissionMatrix,
+}: {
   collapsed: boolean
   onCollapsedChange?: (collapsed: boolean) => void
   onItemClick?: () => void
   user: SidebarUser
+  permissionMatrix: PermissionMatrix
 }) {
   const pathname = usePathname()
   const { data: visiteStats } = useVisiteNavCount()
@@ -354,12 +362,17 @@ function SidebarContent({
     ["Admin", "Manager", "Médecin"].includes(r),
   )
   const { data: salleAttenteCount } = useSalleAttenteNavCount(showSalleAttenteBadge)
-  const navGroups = withNavBadges(getNavigationForRoles(roles), {
+  const baseGroups = user.customGroup
+    ? getNavigationForCustomGroup(user.customGroup)
+    : filterNavGroupsByPermissions(getNavigationForRoles(roles), permissionMatrix, roles)
+  const navGroups = withNavBadges(baseGroups, {
     "/visites": visiteStats?.aujourd_hui,
     "/pharmacie/sorties": sortiesCount,
     "/medical/salle-attente": salleAttenteCount,
   })
-  const roleConfig = getRoleConfig(user.role)
+  const roleConfig = user.customGroup
+    ? { label: user.customGroup.label, className: "bg-slate-100 text-slate-700 border border-slate-200" }
+    : getRoleConfig(user.role)
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" })
@@ -497,12 +510,13 @@ function SidebarContent({
   )
 }
 
-export function Sidebar({ 
-  collapsed, 
-  onCollapsedChange, 
-  mobileOpen, 
+export function Sidebar({
+  collapsed,
+  onCollapsedChange,
+  mobileOpen,
   onMobileOpenChange,
   user,
+  permissionMatrix,
 }: SidebarProps) {
   const isMobile = useIsMobile()
 
@@ -511,10 +525,11 @@ export function Sidebar({
     return (
       <Sheet open={mobileOpen} onOpenChange={onMobileOpenChange}>
         <SheetContent side="left" className="w-64 p-0 [&>button]:hidden">
-          <SidebarContent 
-            collapsed={false} 
+          <SidebarContent
+            collapsed={false}
             onItemClick={() => onMobileOpenChange(false)}
             user={user}
+            permissionMatrix={permissionMatrix}
           />
         </SheetContent>
       </Sheet>
@@ -527,10 +542,11 @@ export function Sidebar({
       "fixed left-0 top-0 z-40 h-screen border-r border-sidebar-border bg-sidebar transition-all duration-300",
       collapsed ? "w-16" : "w-64"
     )}>
-      <SidebarContent 
-        collapsed={collapsed} 
+      <SidebarContent
+        collapsed={collapsed}
         onCollapsedChange={onCollapsedChange}
         user={user}
+        permissionMatrix={permissionMatrix}
       />
     </aside>
   )

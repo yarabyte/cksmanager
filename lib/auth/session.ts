@@ -4,6 +4,7 @@ import {
   mapLegacyRoleStringToAppRole,
   mapLegacyRoleStringToAppRoles,
 } from '@/lib/user-role'
+import { loadPermissionsConfig } from '@/lib/permissions-server'
 import type { Role } from '@/lib/types'
 import { AUTH_COOKIE } from './config'
 import { createSessionToken, verifySessionToken } from './jwt'
@@ -47,6 +48,24 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   if (!user || !user.actif) return null
 
   const roles = mapLegacyRoleStringToAppRoles(user.role)
+  const rawRole = (user.role ?? '').trim()
+
+  if (roles.length === 0 && rawRole) {
+    const { customGroups } = await loadPermissionsConfig()
+    const group = customGroups.find((g) => g.id === rawRole)
+    if (group) {
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: DEFAULT_ROLE,
+        roles: [],
+        legacyRole: user.role,
+        customGroup: group,
+      }
+    }
+  }
+
   const appRoles = roles.length > 0 ? roles : [session.role ?? DEFAULT_ROLE]
   const appRole =
     mapLegacyRoleStringToAppRole(user.role) ?? session.role ?? DEFAULT_ROLE
@@ -58,6 +77,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     role: appRole,
     roles: appRoles,
     legacyRole: user.role,
+    customGroup: null,
   }
 }
 

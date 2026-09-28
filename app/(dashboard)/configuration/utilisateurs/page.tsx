@@ -13,6 +13,7 @@ export default async function UtilisateursConfigPage() {
     <UtilisateursConfigClient
       initialUsers={initialUsers}
       initialPermissionMatrix={permissionsConfig.matrix}
+      initialCustomGroups={permissionsConfig.customGroups}
       canEditPermissions={permissionsConfig.canEdit}
     />
   )

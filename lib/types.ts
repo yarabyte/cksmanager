@@ -121,14 +121,15 @@ export interface Assureur {
 }
 
 // Permission Types
-export type Module = 
-  | "dashboard" 
-  | "patients" 
-  | "visites" 
+export type Module =
+  | "dashboard"
+  | "patients"
+  | "visites"
+  | "feuilleCirculation"
   | "prescriptions"
-  | "facturation" 
-  | "pharmacie" 
-  | "caisse" 
+  | "facturation"
+  | "pharmacie"
+  | "caisse"
   | "configuration"
 
 export type Action = "view" | "create" | "edit" | "delete"
@@ -145,11 +146,31 @@ export interface NavItem {
   icon: string
   badge?: number
   children?: NavItem[]
+  /** Module de droits qui conditionne l'affichage de l'item (absent = toujours visible). */
+  module?: Module
 }
 
 export interface NavGroup {
   label?: string
   items: NavItem[]
+}
+
+/** Page sélectionnable dans le menu d'un groupe personnalisé. */
+export interface PageCatalogItem {
+  href: string
+  label: string
+  icon: string
+}
+
+/**
+ * Groupe de droits personnalisé (créé par un Admin), en plus des rôles fixes.
+ * Son menu latéral est une sélection manuelle de pages (pas dérivé des permissions).
+ */
+export interface CustomGroup {
+  id: string
+  label: string
+  pages: string[]
+  permissions: Record<Module, Action[]>
 }
 
 // Dashboard KPI Types

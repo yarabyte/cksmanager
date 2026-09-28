@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { RoleBadge } from "@/components/shared/status-badge"
+import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -36,7 +37,9 @@ import {
   Pill,
 } from "lucide-react"
 import { toast } from "sonner"
+import { Layers } from "lucide-react"
 import { useUser, useUserMutations } from "@/hooks/use-users"
+import { usePermissionsConfig } from "@/hooks/use-permissions-config"
 import { listCaissePostesForAssignment } from "@/app/actions/caisse-postes"
 import { listPharmaciesForAssignment } from "@/app/actions/pharmacie-ops"
 import {
@@ -198,6 +201,7 @@ type FormState = {
   specialite: string
   numeroOrdre: string
   roles: string[]
+  customGroupId: string
   actif: boolean
   caissePosteId: string
   pharmacieId: string
@@ -212,6 +216,7 @@ const DEFAULT_FORM: FormState = {
   specialite: "",
   numeroOrdre: "",
   roles: [],
+  customGroupId: "",
   actif: true,
   caissePosteId: "",
   pharmacieId: "",
@@ -224,6 +229,8 @@ export default function EditUserPage() {
 
   const { data: user, isPending, error, dataUpdatedAt } = useUser(userId)
   const { update } = useUserMutations()
+  const { data: permissionsConfig } = usePermissionsConfig()
+  const customGroups = permissionsConfig?.customGroups ?? []
 
   const [form, setForm] = React.useState<FormState>(DEFAULT_FORM)
   const [caissePostes, setCaissePostes] = React.useState<{ id: string; nom: string }[]>([])
@@ -234,6 +241,7 @@ export default function EditUserPage() {
   React.useEffect(() => {
     const u = snapshotRef.current
     if (!u) return
+    const legacyRoles = parseLegacyRoleTokens(u.roleRaw)
     setForm({
       name: u.name,
       email: u.email,
@@ -242,7 +250,8 @@ export default function EditUserPage() {
       telephone: u.telephone ?? "",
       specialite: u.specialite ?? "",
       numeroOrdre: u.numeroOrdre ?? "",
-      roles: parseLegacyRoleTokens(u.roleRaw),
+      roles: legacyRoles,
+      customGroupId: legacyRoles.length === 0 && u.roleRaw ? u.roleRaw : "",
       actif: u.actif,
       caissePosteId: u.caissePosteId ?? "",
       pharmacieId: u.pharmacieId ?? "",
@@ -255,6 +264,7 @@ export default function EditUserPage() {
   const showMedecinFields = isMedecinTitre(form.titre)
   const previewRoles = mapLegacyRoleStringToAppRoles(roleSerialized)
   const previewRole = mapLegacyRoleStringToAppRole(roleSerialized)
+  const selectedCustomGroup = customGroups.find((g) => g.id === form.customGroupId)
   const style = roleStyle(previewRole)
 
   function toggleRole(token: string) {
@@ -267,10 +277,21 @@ export default function EditUserPage() {
       return {
         ...prev,
         roles,
+        customGroupId: "",
         caissePosteId: isCaisseLegacyRole(nextSerialized) ? prev.caissePosteId : "",
         pharmacieId: isPharmacieLegacyRole(nextSerialized) ? prev.pharmacieId : "",
       }
     })
+  }
+
+  function selectCustomGroup(id: string) {
+    setForm((prev) => ({
+      ...prev,
+      roles: [],
+      customGroupId: prev.customGroupId === id ? "" : id,
+      caissePosteId: "",
+      pharmacieId: "",
+    }))
   }
 
   React.useEffect(() => {
@@ -304,7 +325,8 @@ export default function EditUserPage() {
       telephone: form.telephone || null,
       specialite: form.specialite || null,
       numeroOrdre: form.numeroOrdre || null,
-      roles: form.roles as UserUpdateValues["roles"],
+      roles: form.customGroupId ? [] : (form.roles as UserUpdateValues["roles"]),
+      customGroupId: form.customGroupId || null,
       actif: form.actif,
       caissePosteId: showCaisseFields && form.caissePosteId ? form.caissePosteId : null,
       pharmacieId: showPharmacieFields && form.pharmacieId ? form.pharmacieId : null,
@@ -409,6 +431,10 @@ export default function EditUserPage() {
                     )}
                   >
                     {previewRole}
+                  </span>
+                ) : selectedCustomGroup ? (
+                  <span className="inline-flex items-center rounded-full border border-teal-100 bg-teal-50/80 px-2.5 py-0.5 text-[11px] font-medium text-teal-700">
+                    {selectedCustomGroup.label}
                   </span>
                 ) : (
                   <span className="inline-flex items-center rounded-full border border-gray-100 bg-gray-50/80 px-2.5 py-0.5 text-[11px] font-medium text-gray-400">
@@ -596,13 +622,14 @@ export default function EditUserPage() {
                         setForm((prev) => ({
                           ...prev,
                           roles: [],
+                          customGroupId: "",
                           caissePosteId: "",
                           pharmacieId: "",
                         }))
                       }
                       className={cn(
                         "flex flex-col items-center gap-1.5 rounded-xl border px-3 py-3 text-center transition-all",
-                        form.roles.length === 0
+                        form.roles.length === 0 && !form.customGroupId
                           ? "border-gray-300 bg-gray-50 shadow-sm ring-1 ring-gray-200"
                           : "border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50",
                       )}
@@ -634,6 +661,40 @@ export default function EditUserPage() {
                     })}
                   </div>
                 </div>
+
+                {customGroups.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-gray-600">
+                      Groupes personnalisés
+                    </Label>
+                    <p className="text-[11px] text-gray-400">
+                      Un groupe personnalisé remplace les rôles applicatifs ci-dessus.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {customGroups.map((g) => {
+                        const selected = form.customGroupId === g.id
+                        return (
+                          <button
+                            key={g.id}
+                            type="button"
+                            onClick={() => selectCustomGroup(g.id)}
+                            className={cn(
+                              "flex flex-col items-center gap-1.5 rounded-xl border px-3 py-3 text-center transition-all",
+                              selected
+                                ? "border-teal-200 bg-teal-50 text-teal-700 shadow-sm ring-1 ring-teal-100"
+                                : "border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50",
+                            )}
+                          >
+                            <Layers className="h-4 w-4" />
+                            <span className="text-[11px] font-semibold leading-tight">
+                              {g.label}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {showCaisseFields && (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
@@ -733,6 +794,10 @@ export default function EditUserPage() {
                         <RoleBadge key={r} role={r} />
                       ))}
                     </div>
+                  ) : selectedCustomGroup ? (
+                    <Badge className="text-[10px] bg-teal-50 text-teal-700 border border-teal-200">
+                      {selectedCustomGroup.label}
+                    </Badge>
                   ) : (
                     <span className="text-gray-400 text-xs">—</span>
                   )}

@@ -23,32 +23,64 @@ import {
   RotateCcw,
   Pencil,
   Lock,
+  Plus,
+  Trash2,
+  Layers,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import {
   resetPermissionMatrixToDefaults,
   savePermissionMatrix,
+  saveCustomGroup,
+  deleteCustomGroup,
 } from "@/app/actions/permissions"
 import {
   ALL_ACTIONS,
   ALL_MODULES,
   ALL_ROLES,
+  countModulePermissions,
   countRolePermissionsFromMatrix,
   getPermissionsForRoleFromMatrix,
 } from "@/lib/permissions"
 import { ACTION_META, MODULE_META } from "@/lib/permissions-meta"
 import {
   matricesEqual,
+  toggleActionSet,
   togglePermission,
   type PermissionMatrix,
 } from "@/lib/permissions-matrix"
+import { PAGE_CATALOG } from "@/lib/navigation"
 import { getInitialsFromFullName } from "@/lib/user-role"
 import type { UserConfigRow } from "@/app/actions/users"
-import type { Action, Module, Role } from "@/lib/types"
+import type { Action, CustomGroup, Module, Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const cardSurface =
@@ -57,10 +89,11 @@ const cardSurface =
 type PermissionsPanelProps = {
   users: UserConfigRow[]
   initialMatrix: PermissionMatrix
+  initialCustomGroups: CustomGroup[]
   canEdit: boolean
-  selectedRole: Role
-  onSelectRole: (role: Role) => void
-  onManageUsers: (role: Role) => void
+  selectedKey: string
+  onSelectKey: (key: string) => void
+  onManageUsers: (key: string) => void
 }
 
 function roleAccent(role: Role): string {
@@ -208,6 +241,185 @@ function RoleSelectCard({
         </div>
       </div>
     </button>
+  )
+}
+
+function GroupSelectCard({
+  group,
+  userCount,
+  selected,
+  onSelect,
+}: {
+  group: CustomGroup
+  userCount: number
+  selected: boolean
+  onSelect: () => void
+}) {
+  const color = "#0d9488"
+  const stats = countModulePermissions(group.permissions)
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        cardSurface,
+        "relative flex w-full flex-col gap-3 p-4 text-left transition-all hover:border-gray-200 hover:shadow-[0_4px_16px_rgba(0,0,0,0.05)]",
+        selected && "shadow-[0_4px_16px_rgba(0,0,0,0.08)] ring-2",
+      )}
+      style={
+        selected
+          ? ({ borderColor: `${color}50`, "--tw-ring-color": `${color}30` } as React.CSSProperties)
+          : undefined
+      }
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+          style={{ backgroundColor: `${color}14`, color }}
+        >
+          <Layers className="h-5 w-5" />
+        </div>
+        <div
+          className={cn(
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors",
+            selected ? "border-transparent text-white" : "border-gray-200 bg-white",
+          )}
+          style={selected ? { backgroundColor: color } : undefined}
+        >
+          {selected && <Check className="h-3 w-3" />}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <span className="inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold bg-teal-50 text-teal-700 border-teal-200">
+          {group.label}
+        </span>
+        <div>
+          <p className="text-2xl font-extrabold tabular-nums leading-none text-gray-900">
+            {userCount}
+            <span className="ml-1.5 text-xs font-medium text-gray-400">
+              utilisateur{userCount > 1 ? "s" : ""}
+            </span>
+          </p>
+          <p className="mt-1.5 text-[11px] text-gray-500">
+            {group.pages.length} page{group.pages.length > 1 ? "s" : ""} ·{" "}
+            {stats.actionCount} action{stats.actionCount > 1 ? "s" : ""}
+          </p>
+        </div>
+      </div>
+    </button>
+  )
+}
+
+function CreateGroupCard({ onCreated }: { onCreated: (group: CustomGroup) => void }) {
+  const [open, setOpen] = React.useState(false)
+  const [label, setLabel] = React.useState("")
+  const [pages, setPages] = React.useState<string[]>([])
+  const [pending, setPending] = React.useState(false)
+
+  function togglePage(href: string) {
+    setPages((prev) =>
+      prev.includes(href) ? prev.filter((p) => p !== href) : [...prev, href],
+    )
+  }
+
+  async function handleCreate() {
+    if (!label.trim()) {
+      toast.error("Le nom du groupe est requis.")
+      return
+    }
+    setPending(true)
+    try {
+      const res = await saveCustomGroup({ label: label.trim(), pages })
+      if (res.ok) {
+        toast.success("Groupe créé")
+        onCreated(res.group)
+        setOpen(false)
+        setLabel("")
+        setPages([])
+      } else {
+        toast.error(res.error)
+      }
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            cardSurface,
+            "flex w-full flex-col items-center justify-center gap-2 border border-dashed border-gray-200 bg-gray-50/30 p-4 text-gray-400 transition-colors hover:border-teal-300 hover:bg-teal-50/30 hover:text-teal-700 min-h-[148px]",
+          )}
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-gray-100">
+            <Plus className="h-5 w-5" />
+          </div>
+          <span className="text-xs font-medium">Nouveau groupe</span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Nouveau groupe personnalisé</DialogTitle>
+          <DialogDescription>
+            Choisissez un nom et les pages accessibles depuis le menu. Vous pourrez ajuster
+            les droits (voir/créer/modifier/supprimer) après création.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="group-label" className="text-xs font-semibold text-gray-600">
+              Nom du groupe
+            </Label>
+            <Input
+              id="group-label"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="ex. Secrétariat"
+              className="h-9"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-gray-600">
+              Pages visibles dans le menu
+            </Label>
+            <ScrollArea className="h-56 rounded-xl border border-gray-100 p-2">
+              <div className="space-y-1">
+                {PAGE_CATALOG.map((page) => (
+                  <label
+                    key={page.href}
+                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-gray-50 cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={pages.includes(page.href)}
+                      onCheckedChange={() => togglePage(page.href)}
+                    />
+                    <span className="text-gray-700">{page.label}</span>
+                  </label>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
+            Annuler
+          </Button>
+          <Button
+            onClick={() => void handleCreate()}
+            disabled={pending}
+            className="gap-2 bg-teal-600 hover:bg-teal-700 text-white"
+          >
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            Créer le groupe
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -399,30 +611,56 @@ function ComparisonMatrix({ matrix }: { matrix: PermissionMatrix }) {
 export function PermissionsPanel({
   users,
   initialMatrix,
+  initialCustomGroups,
   canEdit,
-  selectedRole,
-  onSelectRole,
+  selectedKey,
+  onSelectKey,
   onManageUsers,
 }: PermissionsPanelProps) {
   const [view, setView] = React.useState<"role" | "matrix">("role")
   const [matrix, setMatrix] = React.useState<PermissionMatrix>(initialMatrix)
   const [savedMatrix, setSavedMatrix] = React.useState<PermissionMatrix>(initialMatrix)
+  const [customGroups, setCustomGroups] = React.useState<CustomGroup[]>(initialCustomGroups)
+  const [savedCustomGroups, setSavedCustomGroups] =
+    React.useState<CustomGroup[]>(initialCustomGroups)
   const [pending, setPending] = React.useState(false)
+  const [deletePending, setDeletePending] = React.useState(false)
 
   React.useEffect(() => {
     setMatrix(initialMatrix)
     setSavedMatrix(initialMatrix)
   }, [initialMatrix])
 
-  const dirty = !matricesEqual(matrix, savedMatrix)
-  const rolePermissions = getPermissionsForRoleFromMatrix(matrix, selectedRole)
-  const stats = countRolePermissionsFromMatrix(matrix, selectedRole)
-  const roleUsers = users.filter((u) =>
-    (u.appRoles?.length ? u.appRoles : u.appRole ? [u.appRole] : []).includes(
-      selectedRole,
-    ),
-  )
-  const color = roleAccent(selectedRole)
+  React.useEffect(() => {
+    setCustomGroups(initialCustomGroups)
+    setSavedCustomGroups(initialCustomGroups)
+  }, [initialCustomGroups])
+
+  const selectedRole: Role | null = ALL_ROLES.includes(selectedKey as Role)
+    ? (selectedKey as Role)
+    : null
+  const group = customGroups.find((g) => g.id === selectedKey) ?? null
+  const savedGroup = savedCustomGroups.find((g) => g.id === selectedKey) ?? null
+
+  const dirty = selectedRole
+    ? !matricesEqual(matrix, savedMatrix)
+    : JSON.stringify(group) !== JSON.stringify(savedGroup)
+
+  const rolePermissions = selectedRole
+    ? getPermissionsForRoleFromMatrix(matrix, selectedRole)
+    : group?.permissions ?? ({} as Record<Module, Action[]>)
+  const stats = selectedRole
+    ? countRolePermissionsFromMatrix(matrix, selectedRole)
+    : countModulePermissions(group?.permissions ?? ({} as Record<Module, Action[]>))
+  const roleUsers = users.filter((u) => {
+    if (selectedRole) {
+      return (u.appRoles?.length ? u.appRoles : u.appRole ? [u.appRole] : []).includes(
+        selectedRole,
+      )
+    }
+    return group ? u.roleRaw === group.id : false
+  })
+  const color = selectedRole ? roleAccent(selectedRole) : "#0d9488"
 
   const usersByRole = React.useMemo(() => {
     const counts: Record<string, number> = {}
@@ -433,7 +671,8 @@ export function PermissionsPanel({
           ? [u.appRole]
           : []
       if (list.length === 0) {
-        counts.none = (counts.none ?? 0) + 1
+        if (u.roleRaw) counts[u.roleRaw] = (counts[u.roleRaw] ?? 0) + 1
+        else counts.none = (counts.none ?? 0) + 1
         continue
       }
       for (const r of list) {
@@ -445,16 +684,69 @@ export function PermissionsPanel({
 
   function handleToggle(module: Module, action: Action, enabled: boolean) {
     if (!canEdit) return
-    setMatrix((prev) => togglePermission(prev, selectedRole, module, action, enabled))
+    if (selectedRole) {
+      setMatrix((prev) => togglePermission(prev, selectedRole, module, action, enabled))
+      return
+    }
+    if (!group) return
+    setCustomGroups((prev) =>
+      prev.map((g) =>
+        g.id === group.id
+          ? {
+              ...g,
+              permissions: {
+                ...g.permissions,
+                [module]: toggleActionSet(g.permissions[module] ?? [], module, action, enabled),
+              },
+            }
+          : g,
+      ),
+    )
+  }
+
+  function handleTogglePage(href: string, enabled: boolean) {
+    if (!canEdit || !group) return
+    setCustomGroups((prev) =>
+      prev.map((g) =>
+        g.id === group.id
+          ? {
+              ...g,
+              pages: enabled ? [...new Set([...g.pages, href])] : g.pages.filter((p) => p !== href),
+            }
+          : g,
+      ),
+    )
+  }
+
+  function handleRenameGroup(label: string) {
+    if (!canEdit || !group) return
+    setCustomGroups((prev) => prev.map((g) => (g.id === group.id ? { ...g, label } : g)))
   }
 
   async function handleSave() {
     setPending(true)
     try {
-      const res = await savePermissionMatrix(matrix)
+      if (selectedRole) {
+        const res = await savePermissionMatrix(matrix)
+        if (res.ok) {
+          setSavedMatrix(matrix)
+          toast.success("Permissions enregistrées")
+        } else {
+          toast.error(res.error)
+        }
+        return
+      }
+      if (!group) return
+      const res = await saveCustomGroup({
+        id: group.id,
+        label: group.label,
+        pages: group.pages,
+        permissions: group.permissions,
+      })
       if (res.ok) {
-        setSavedMatrix(matrix)
-        toast.success("Permissions enregistrées")
+        setSavedCustomGroups((prev) => prev.map((g) => (g.id === res.group.id ? res.group : g)))
+        setCustomGroups((prev) => prev.map((g) => (g.id === res.group.id ? res.group : g)))
+        toast.success("Groupe enregistré")
       } else {
         toast.error(res.error)
       }
@@ -480,8 +772,36 @@ export function PermissionsPanel({
   }
 
   function handleDiscard() {
-    setMatrix(savedMatrix)
+    if (selectedRole) {
+      setMatrix(savedMatrix)
+    } else if (savedGroup) {
+      setCustomGroups((prev) => prev.map((g) => (g.id === savedGroup.id ? savedGroup : g)))
+    }
     toast.message("Modifications annulées")
+  }
+
+  async function handleDeleteGroup() {
+    if (!group) return
+    setDeletePending(true)
+    try {
+      const res = await deleteCustomGroup(group.id)
+      if (res.ok) {
+        setCustomGroups((prev) => prev.filter((g) => g.id !== group.id))
+        setSavedCustomGroups((prev) => prev.filter((g) => g.id !== group.id))
+        toast.success("Groupe supprimé")
+        onSelectKey("Admin")
+      } else {
+        toast.error(res.error)
+      }
+    } finally {
+      setDeletePending(false)
+    }
+  }
+
+  function handleGroupCreated(newGroup: CustomGroup) {
+    setCustomGroups((prev) => [...prev, newGroup])
+    setSavedCustomGroups((prev) => [...prev, newGroup])
+    onSelectKey(newGroup.id)
   }
 
   return (
@@ -493,8 +813,9 @@ export function PermissionsPanel({
             Gestion des permissions
           </h2>
           <p className="text-sm text-gray-500 max-w-2xl leading-relaxed">
-            Sélectionnez un rôle, puis utilisez les interrupteurs pour définir ses droits par module.
-            Cliquez sur <strong>Enregistrer</strong> pour appliquer les changements.
+            Sélectionnez un rôle ou un groupe personnalisé, puis utilisez les interrupteurs pour
+            définir ses droits par module. Cliquez sur <strong>Enregistrer</strong> pour appliquer
+            les changements.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -562,9 +883,10 @@ export function PermissionsPanel({
               "Modifications non enregistrées"
             ) : (
               <>
-                Utilisez les interrupteurs ci-dessous pour modifier les droits du rôle{" "}
+                Utilisez les interrupteurs ci-dessous pour modifier les droits{" "}
+                {selectedRole ? "du rôle" : "du groupe"}{" "}
                 <span className="font-semibold" style={{ color }}>
-                  {selectedRole}
+                  {selectedRole ?? group?.label}
                 </span>
                 .
               </>
@@ -581,17 +903,19 @@ export function PermissionsPanel({
             >
               Annuler
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2 rounded-xl"
-              disabled={pending}
-              onClick={() => void handleReset()}
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Défauts
-            </Button>
+            {selectedRole && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2 rounded-xl"
+                disabled={pending}
+                onClick={() => void handleReset()}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Défauts
+              </Button>
+            )}
             <Button
               type="button"
               size="sm"
@@ -630,9 +954,19 @@ export function PermissionsPanel({
                 matrix={matrix}
                 userCount={usersByRole[role] ?? 0}
                 selected={selectedRole === role}
-                onSelect={() => onSelectRole(role)}
+                onSelect={() => onSelectKey(role)}
               />
             ))}
+            {customGroups.map((g) => (
+              <GroupSelectCard
+                key={g.id}
+                group={g}
+                userCount={usersByRole[g.id] ?? 0}
+                selected={selectedKey === g.id}
+                onSelect={() => onSelectKey(g.id)}
+              />
+            ))}
+            {canEdit && <CreateGroupCard onCreated={handleGroupCreated} />}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
@@ -666,11 +1000,102 @@ export function PermissionsPanel({
             </div>
           </div>
 
+          {group && (
+            <div className={cn(cardSurface, "flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between")}>
+              <div className="flex-1 space-y-1.5">
+                <Label htmlFor="group-rename" className="text-xs font-semibold text-gray-600">
+                  Nom du groupe
+                </Label>
+                <Input
+                  id="group-rename"
+                  value={group.label}
+                  onChange={(e) => handleRenameGroup(e.target.value)}
+                  disabled={!canEdit}
+                  className="h-9 max-w-xs"
+                />
+              </div>
+              {canEdit && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 rounded-xl border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 shrink-0"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Supprimer le groupe
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Supprimer « {group.label} » ?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Cette action est irréversible. Si des comptes sont encore assignés à ce
+                        groupe, la suppression sera refusée.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={deletePending}>Annuler</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-red-600 hover:bg-red-700 gap-2"
+                        disabled={deletePending}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          void handleDeleteGroup()
+                        }}
+                      >
+                        {deletePending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                        Supprimer
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
+          )}
+
+          {group && (
+            <div className={cn(cardSurface, "p-5")}>
+              <h3 className="mb-3 text-sm font-semibold text-gray-800">
+                Pages visibles dans le menu
+              </h3>
+              <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                {PAGE_CATALOG.map((page) => {
+                  const checked = group.pages.includes(page.href)
+                  return (
+                    <label
+                      key={page.href}
+                      className={cn(
+                        "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs",
+                        checked
+                          ? "border-teal-100 bg-teal-50/50 text-teal-800"
+                          : "border-gray-100 bg-gray-50/50 text-gray-500",
+                        canEdit && "cursor-pointer",
+                      )}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        disabled={!canEdit}
+                        onCheckedChange={(v) => handleTogglePage(page.href, v === true)}
+                      />
+                      {page.label}
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div>
             <div className="mb-3 flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold text-gray-800">
-                Droits du rôle{" "}
-                <span style={{ color }}>{selectedRole}</span>
+                Droits {selectedRole ? "du rôle" : "du groupe"}{" "}
+                <span style={{ color }}>{selectedRole ?? group?.label}</span>
               </h3>
               {canEdit && (
                 <p className="text-[11px] text-gray-400">
@@ -709,7 +1134,7 @@ export function PermissionsPanel({
                 variant="outline"
                 size="sm"
                 className="gap-2 rounded-xl shrink-0"
-                onClick={() => onManageUsers(selectedRole)}
+                onClick={() => onManageUsers(selectedKey)}
               >
                 Gérer les comptes
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -756,7 +1181,7 @@ export function PermissionsPanel({
                 {roleUsers.length > 8 && (
                   <button
                     type="button"
-                    onClick={() => onManageUsers(selectedRole)}
+                    onClick={() => onManageUsers(selectedKey)}
                     className="w-full px-4 py-3 text-xs font-medium text-[#cd3b86] hover:bg-pink-50/50 transition-colors"
                   >
                     Voir les {roleUsers.length - 8} autres utilisateurs

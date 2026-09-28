@@ -122,8 +122,9 @@ export async function updateUser(
   data: unknown,
 ): Promise<UserConfigRow> {
   const parsed = userUpdateSchema.parse(data)
-  const roleValue =
-    parsed.roles !== undefined
+  const roleValue = parsed.customGroupId
+    ? parsed.customGroupId
+    : parsed.roles !== undefined
       ? serializeLegacyRoleTokens(parsed.roles)
       : parsed.role?.trim() || null
   const caisseRole = isCaisseLegacyRole(roleValue)

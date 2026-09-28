@@ -5,13 +5,15 @@ import { Sidebar } from "./sidebar"
 import { Header } from "./header"
 import { cn } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
+import type { PermissionMatrix } from "@/lib/permissions-matrix"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
   user: import("@/lib/auth/types").SidebarUser
+  permissionMatrix: PermissionMatrix
 }
 
-export function DashboardLayout({ children, user }: DashboardLayoutProps) {
+export function DashboardLayout({ children, user, permissionMatrix }: DashboardLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
   const isMobile = useIsMobile()
@@ -25,6 +27,7 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
         mobileOpen={mobileMenuOpen}
         onMobileOpenChange={setMobileMenuOpen}
         user={user}
+        permissionMatrix={permissionMatrix}
       />
       
       {/* Main content area */}

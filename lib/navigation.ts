@@ -1,4 +1,7 @@
-import type { Role, NavGroup, NavItem } from "./types"
+import type { CustomGroup, PageCatalogItem, Role, NavGroup, NavItem } from "./types"
+import { hasPermissionWithMatrixAny } from "./permissions"
+import { ALL_ROLES } from "./permissions-matrix"
+import type { PermissionMatrix } from "./permissions-matrix"
 
 const caisseNavItem: NavItem = {
   label: "Gestion de la caisse",
@@ -127,6 +130,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
               label: "Feuille de circulation",
               href: "/feuilles-circulation",
               icon: "ScrollText",
+              module: "feuilleCirculation",
             },
             {
               label: "Prescriptions",
@@ -160,12 +164,6 @@ export function getNavigationForRole(role: Role): NavGroup[] {
           label: "Médical",
           items: medicalNavItems,
         },
-        {
-          label: "Développement",
-          items: [
-            { label: "Composants", href: "/composants", icon: "Layers" },
-          ],
-        },
       ]
 
     case "Manager":
@@ -180,6 +178,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
               label: "Feuille de circulation",
               href: "/feuilles-circulation",
               icon: "ScrollText",
+              module: "feuilleCirculation",
             },
             {
               label: "Prescriptions",
@@ -216,15 +215,6 @@ export function getNavigationForRole(role: Role): NavGroup[] {
       return [
         ...baseNav,
         {
-          label: "Mon activité",
-          items: [
-            { label: "Mes patients", href: "/patients", icon: "Users" },
-            { label: "Consultations", href: "/visites", icon: "Stethoscope" },
-            { label: "Prescriptions", href: "/prescriptions", icon: "ClipboardList" },
-            { label: "Planning", href: "/planning", icon: "Calendar" },
-          ],
-        },
-        {
           label: "Médical",
           items: medicalNavItems,
         },
@@ -238,7 +228,13 @@ export function getNavigationForRole(role: Role): NavGroup[] {
           items: [
             { label: "Patients", href: "/patients", icon: "Users" },
             { label: "Rendez-vous", href: "/rendez-vous", icon: "CalendarCheck" },
-            { label: "Admissions", href: "/visites", icon: "UserPlus" },
+            { label: "Visites", href: "/visites", icon: "UserPlus" },
+            {
+              label: "Feuille de circulation",
+              href: "/feuilles-circulation",
+              icon: "ScrollText",
+              module: "feuilleCirculation",
+            },
           ],
         },
       ]
@@ -288,6 +284,81 @@ export function getNavigationForRole(role: Role): NavGroup[] {
     default:
       return baseNav
   }
+}
+
+/** Retire les items (et sous-items) dont le module de droits n'est pas autorisé pour ces rôles. */
+export function filterNavGroupsByPermissions(
+  groups: NavGroup[],
+  matrix: PermissionMatrix,
+  roles: Role[],
+): NavGroup[] {
+  const isAllowed = (item: NavItem) =>
+    !item.module || hasPermissionWithMatrixAny(matrix, roles, item.module, "view")
+
+  return groups
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .filter(isAllowed)
+        .map((item) =>
+          item.children
+            ? { ...item, children: item.children.filter(isAllowed) }
+            : item,
+        ),
+    }))
+    .filter((group) => group.items.length > 0)
+}
+
+/** Catalogue de toutes les pages existantes (dédupliquées par href), pour composer le menu d'un groupe personnalisé. */
+export const PAGE_CATALOG: PageCatalogItem[] = (() => {
+  const seen = new Map<string, PageCatalogItem>()
+  for (const role of ALL_ROLES) {
+    for (const group of getNavigationForRole(role)) {
+      for (const item of group.items) {
+        if (!seen.has(item.href)) {
+          seen.set(item.href, { href: item.href, label: item.label, icon: item.icon })
+        }
+        for (const child of item.children ?? []) {
+          if (!seen.has(child.href)) {
+            seen.set(child.href, {
+              href: child.href,
+              label: `${item.label} — ${child.label}`,
+              icon: child.icon,
+            })
+          }
+        }
+      }
+    }
+  }
+  return [...seen.values()]
+})()
+
+/** Menu latéral d'un groupe personnalisé : baseNav + une sélection manuelle de pages. */
+export function getNavigationForCustomGroup(group: Pick<CustomGroup, "label" | "pages">): NavGroup[] {
+  const pageSet = new Set(group.pages)
+  const items = PAGE_CATALOG.filter((p) => pageSet.has(p.href))
+  if (items.length === 0) return baseNavGroups()
+  return [
+    ...baseNavGroups(),
+    {
+      label: group.label,
+      items: items.map((p) => ({ label: p.label, href: p.href, icon: p.icon })),
+    },
+  ]
+}
+
+function baseNavGroups(): NavGroup[] {
+  return [
+    {
+      items: [
+        {
+          label: "Tableau de bord",
+          href: "/dashboard",
+          icon: "LayoutDashboard",
+        },
+      ],
+    },
+  ]
 }
 
 // Breadcrumb mapping

@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Users,
   Stethoscope,
+  ScrollText,
   ClipboardList,
   Receipt,
   Pill,
@@ -36,6 +37,12 @@ export const MODULE_META: Record<
     description: "Consultations et feuilles de circulation",
     icon: Stethoscope,
     color: "#3b82f6",
+  },
+  feuilleCirculation: {
+    label: "Feuille de circulation",
+    description: "Parcours du patient entre les services de la clinique",
+    icon: ScrollText,
+    color: "#0d9488",
   },
   prescriptions: {
     label: "Prescriptions",

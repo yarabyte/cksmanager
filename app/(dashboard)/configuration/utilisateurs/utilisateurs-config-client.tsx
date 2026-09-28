@@ -47,7 +47,7 @@ import { deleteUser, type UserConfigRow } from "@/app/actions/users"
 import { getInitialsFromFullName, isMedecinTitre } from "@/lib/user-role"
 import { ALL_ROLES } from "@/lib/permissions"
 import type { PermissionMatrix } from "@/lib/permissions-matrix"
-import type { Role } from "@/lib/types"
+import type { CustomGroup, Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const cardSurface =
@@ -108,14 +108,17 @@ function RoleStatCard({
 
 function UserCard({
   user,
+  customGroups,
   onRequestDelete,
 }: {
   user: UserConfigRow
+  customGroups: CustomGroup[]
   onRequestDelete: (user: UserConfigRow) => void
 }) {
   const style = roleStyle(user.appRole)
   const router = useRouter()
   const editHref = `/configuration/utilisateurs/${user.id}/edit`
+  const customGroup = customGroups.find((g) => g.id === user.roleRaw)
 
   return (
     <div
@@ -149,6 +152,10 @@ function UserCard({
                   (user.appRoles?.length ? user.appRoles : [user.appRole!]).map((r) => (
                     <RoleBadge key={r} role={r} />
                   ))
+                ) : customGroup ? (
+                  <Badge className="h-5 px-1.5 text-[10px] bg-teal-50 text-teal-700 border border-teal-200">
+                    {customGroup.label}
+                  </Badge>
                 ) : (
                   <Badge variant="outline" className="h-5 px-1.5 text-[10px] text-gray-500">
                     Non assigné
@@ -280,17 +287,19 @@ function UserCard({
 type Props = {
   initialUsers: UserConfigRow[]
   initialPermissionMatrix: PermissionMatrix
+  initialCustomGroups: CustomGroup[]
   canEditPermissions: boolean
 }
 
 export function UtilisateursConfigClient({
   initialUsers,
   initialPermissionMatrix,
+  initialCustomGroups,
   canEditPermissions,
 }: Props) {
   const router = useRouter()
   const [isNewUserOpen, setIsNewUserOpen] = React.useState(false)
-  const [selectedRole, setSelectedRole] = React.useState<Role>("Admin")
+  const [selectedKey, setSelectedKey] = React.useState<string>("Admin")
   const [activeTab, setActiveTab] = React.useState("users")
   const [formTitre, setFormTitre] = React.useState<string>("")
   const [viewMode, setViewMode] = React.useState<"list" | "grid">("grid")
@@ -300,6 +309,7 @@ export function UtilisateursConfigClient({
   const [deletePending, setDeletePending] = React.useState(false)
 
   const showMedecinForm = isMedecinTitre(formTitre)
+  const customGroupIds = initialCustomGroups.map((g) => g.id)
 
   async function confirmDelete() {
     if (!deleteTarget) return
@@ -319,18 +329,18 @@ export function UtilisateursConfigClient({
   }
 
   React.useEffect(() => {
-    if (roles.includes(filterRole as Role)) {
-      setSelectedRole(filterRole as Role)
+    if (roles.includes(filterRole as Role) || customGroupIds.includes(filterRole)) {
+      setSelectedKey(filterRole)
     }
-  }, [filterRole])
+  }, [filterRole]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handleManageUsersForRole(role: Role) {
-    setFilterRole(role)
-    setSelectedRole(role)
+  function handleManageUsersForKey(key: string) {
+    setFilterRole(key)
+    setSelectedKey(key)
     setActiveTab("users")
   }
 
-  // Stats per role
+  // Stats per role / groupe personnalisé
   const roleCounts = React.useMemo(() => {
     const counts: Record<string, number> = {}
     for (const u of initialUsers) {
@@ -340,7 +350,11 @@ export function UtilisateursConfigClient({
           ? [u.appRole]
           : []
       if (list.length === 0) {
-        counts.none = (counts.none ?? 0) + 1
+        if (u.roleRaw && customGroupIds.includes(u.roleRaw)) {
+          counts[u.roleRaw] = (counts[u.roleRaw] ?? 0) + 1
+        } else {
+          counts.none = (counts.none ?? 0) + 1
+        }
         continue
       }
       for (const r of list) {
@@ -348,7 +362,7 @@ export function UtilisateursConfigClient({
       }
     }
     return counts
-  }, [initialUsers])
+  }, [initialUsers]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeCount = initialUsers.filter((u) => u.actif).length
   const inactiveCount = initialUsers.length - activeCount
@@ -364,10 +378,14 @@ export function UtilisateursConfigClient({
           : []
       const matchRole =
         filterRole === "all" ||
-        (filterRole === "none" ? userRoles.length === 0 : userRoles.includes(filterRole as Role))
+        (filterRole === "none"
+          ? userRoles.length === 0 && !(u.roleRaw && customGroupIds.includes(u.roleRaw))
+          : customGroupIds.includes(filterRole)
+            ? u.roleRaw === filterRole
+            : userRoles.includes(filterRole as Role))
       return matchSearch && matchRole
     })
-  }, [initialUsers, search, filterRole])
+  }, [initialUsers, search, filterRole]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasFilters = search !== "" || filterRole !== "all"
 
@@ -560,6 +578,25 @@ export function UtilisateursConfigClient({
                 onClick={() => setFilterRole(filterRole === r ? "all" : r)}
                 active={filterRole === r} />
             ) : null)}
+            {initialCustomGroups.map((g) => (roleCounts[g.id] ?? 0) > 0 ? (
+              <button
+                key={g.id}
+                onClick={() => setFilterRole(filterRole === g.id ? "all" : g.id)}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-xl border transition-all duration-150 min-w-[80px]",
+                  filterRole === g.id
+                    ? "bg-teal-50 text-teal-700 border-teal-200 shadow-sm scale-[1.02]"
+                    : "bg-white border-gray-100 hover:border-gray-200 hover:shadow-sm",
+                )}
+              >
+                <span className={cn("text-xl font-extrabold leading-none", filterRole === g.id ? "" : "text-gray-800")}>
+                  {roleCounts[g.id] ?? 0}
+                </span>
+                <span className={cn("text-[10px] font-semibold leading-tight text-center", filterRole === g.id ? "" : "text-gray-500")}>
+                  {g.label}
+                </span>
+              </button>
+            ) : null)}
           </div>
         </div>
 
@@ -607,6 +644,9 @@ export function UtilisateursConfigClient({
                       <SelectContent>
                         <SelectItem value="all">Tous les rôles</SelectItem>
                         {roles.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                        {initialCustomGroups.map((g) => (
+                          <SelectItem key={g.id} value={g.id}>{g.label}</SelectItem>
+                        ))}
                         <SelectItem value="none">Non assigné</SelectItem>
                       </SelectContent>
                     </Select>
@@ -730,6 +770,10 @@ export function UtilisateursConfigClient({
                                         <RoleBadge key={r} role={r} />
                                       ))}
                                     </div>
+                                  ) : initialCustomGroups.find((g) => g.id === user.roleRaw) ? (
+                                    <Badge className="text-xs bg-teal-50 text-teal-700 border border-teal-200">
+                                      {initialCustomGroups.find((g) => g.id === user.roleRaw)?.label}
+                                    </Badge>
                                   ) : (
                                     <Badge variant="secondary" className="text-xs">
                                       Non assigné
@@ -823,6 +867,7 @@ export function UtilisateursConfigClient({
                     <UserCard
                       key={user.id}
                       user={user}
+                      customGroups={initialCustomGroups}
                       onRequestDelete={setDeleteTarget}
                     />
                   ))}
@@ -849,10 +894,11 @@ export function UtilisateursConfigClient({
             <PermissionsPanel
               users={initialUsers}
               initialMatrix={initialPermissionMatrix}
+              initialCustomGroups={initialCustomGroups}
               canEdit={canEditPermissions}
-              selectedRole={selectedRole}
-              onSelectRole={setSelectedRole}
-              onManageUsers={handleManageUsersForRole}
+              selectedKey={selectedKey}
+              onSelectKey={setSelectedKey}
+              onManageUsers={handleManageUsersForKey}
             />
           </TabsContent>
         </Tabs>
