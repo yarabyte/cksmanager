@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { syncPgSerial } from '@/lib/db/sync-pg-serial'
+import { syncPgSerial, nextPgSerialId, isPrismaIdCollision } from '@/lib/db/sync-pg-serial'
 import { toSerializable } from '@/lib/json-bigint'
 import { requireUser, requireUserId } from '@/lib/auth/session'
 import { userIsAdmin } from '@/lib/user-role'
@@ -181,15 +181,31 @@ export async function openCaisseSession(
       return { ok: false, error: 'Ce poste est déjà utilisé par un autre caissier.' }
     }
 
-    await syncPgSerial('caisse_sessions')
-    const session = await prisma.caisseSession.create({
-      data: {
-        posteId,
-        userId,
-        statut: 'OUVERTE',
-        soldeOuverture: round2(v.soldeOuverture),
-      },
-    })
+    await syncPgSerial('caisse_sessions').catch(() => undefined)
+
+    let session: Awaited<ReturnType<typeof prisma.caisseSession.create>> | null = null
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const id = await nextPgSerialId('caisse_sessions')
+      try {
+        session = await prisma.caisseSession.create({
+          data: {
+            id,
+            posteId,
+            userId,
+            statut: 'OUVERTE',
+            soldeOuverture: round2(v.soldeOuverture),
+          },
+        })
+        break
+      } catch (err) {
+        if (!isPrismaIdCollision(err) || attempt === 7) throw err
+      }
+    }
+    if (!session) {
+      return { ok: false, error: "Impossible d'ouvrir la caisse." }
+    }
+
+    await syncPgSerial('caisse_sessions').catch(() => undefined)
 
     revalidatePath('/caisse')
     revalidatePath('/caisse/ouverture')
