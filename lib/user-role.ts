@@ -134,6 +134,16 @@ export function userIsAdmin(roles: Role[] | null | undefined): boolean {
   return userHasAnyRole(roles, ["Admin"])
 }
 
+/** Assignation médecin sur une visite : rôle Médecin, ou Admin avec titre Dr/Pr. */
+export function userCanBeVisitMedecin(
+  role: string | null | undefined,
+  titre: string | null | undefined,
+): boolean {
+  const roles = mapLegacyRoleStringToAppRoles(role)
+  if (roles.includes("Médecin")) return true
+  return roles.includes("Admin") && isMedecinTitre(titre)
+}
+
 /**
  * Initiales monogramme (nom complet : prénom le plus souvent en dernier dans la base héritée).
  */

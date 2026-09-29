@@ -14,6 +14,7 @@ import {
 } from '@/lib/timezone'
 import { requireUserId } from '@/lib/auth/session'
 import { notifyEventAsync } from '@/lib/notifications/create-notification'
+import { userCanBeVisitMedecin } from '@/lib/user-role'
 
 export type PatientAssurancePreview = {
   assuranceNom: string
@@ -258,10 +259,18 @@ export type MedecinOption = { id: string; nom: string; titre: string | null }
 
 export async function listMedecins(): Promise<MedecinOption[]> {
   const rows = await prisma.user.findMany({
-    where: { actif: true, role: { in: ['medecins', 'MEDECIN'] } },
+    where: {
+      actif: true,
+      OR: [
+        { role: { contains: 'medecin', mode: 'insensitive' } },
+        { role: { contains: 'admin', mode: 'insensitive' } },
+      ],
+    },
     orderBy: { name: 'asc' },
   })
-  return rows.map((u) => ({ id: u.id.toString(), nom: u.name, titre: u.titre }))
+  return rows
+    .filter((u) => userCanBeVisitMedecin(u.role, u.titre))
+    .map((u) => ({ id: u.id.toString(), nom: u.name, titre: u.titre }))
 }
 
 export type PatientOption = {
