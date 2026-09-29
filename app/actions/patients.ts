@@ -14,6 +14,7 @@ import { requireUser, requireUserId } from '@/lib/auth/session'
 import { z } from 'zod'
 import { notifyEventAsync } from '@/lib/notifications/create-notification'
 import { formatPatientIdentityLine } from '@/lib/formatting'
+import { insertWithNextId, prismaWriteErrorMessage } from '@/lib/db/sync-pg-serial'
 
 export async function listPatients(params: {
   q?: string
@@ -87,71 +88,96 @@ export async function getPatientById(id: string) {
   return patient ? toSerializable(patient) : null
 }
 
-export async function createPatient(data: unknown) {
-  const userId = await requireUserId()
-  const v = patientCreateSchema.parse(data)
-  const patNum1 = normalizeWhatsAppPhone(v.patNum1)!
-  const patNum2 =
-    v.patNum2 && v.patNum2.trim() ? normalizeWhatsAppPhone(v.patNum2) : null
+export async function createPatient(data: unknown): Promise<{ ok: true; patient: unknown } | { ok: false; error: string }> {
+  try {
+    const userId = await requireUserId()
+    const v = patientCreateSchema.parse(data)
+    const patNum1 = normalizeWhatsAppPhone(v.patNum1)!
+    const patNum2 =
+      v.patNum2 && v.patNum2.trim() ? normalizeWhatsAppPhone(v.patNum2) : null
 
-  const patient = await prisma.$transaction(async (tx) => {
-    const created = await tx.patient.create({
-      data: {
-        civilite: v.civilite,
-        patName: v.patName,
-        patSurname: v.patSurname,
-        nomJeuneFille:
-          v.sexe === 2 ? (v.nomJeuneFille?.trim() ? v.nomJeuneFille.trim() : null) : null,
-        patEmail: v.patEmail || null,
-        patDob: v.patDob,
-        patLieuNaiss: v.patLieuNaiss,
-        patCni: v.patCni ?? null,
-        patAdress: v.patAdress,
-        patNum1,
-        patNum2,
-        patProfession: v.patProfession ?? null,
-        sexe: v.sexe,
-      },
+    const patient = await prisma.$transaction(async (tx) => {
+      const created = await insertWithNextId(
+        'patients',
+        (id) =>
+          tx.patient.create({
+            data: {
+              id,
+              civilite: v.civilite,
+              patName: v.patName,
+              patSurname: v.patSurname,
+              nomJeuneFille:
+                v.sexe === 2 ? (v.nomJeuneFille?.trim() ? v.nomJeuneFille.trim() : null) : null,
+              patEmail: v.patEmail || null,
+              patDob: v.patDob,
+              patLieuNaiss: v.patLieuNaiss,
+              patCni: v.patCni ?? null,
+              patAdress: v.patAdress,
+              patNum1,
+              patNum2,
+              patProfession: v.patProfession ?? null,
+              sexe: v.sexe,
+            },
+          }),
+        tx,
+      )
+
+      await insertWithNextId(
+        'wallets',
+        (id) =>
+          tx.wallet.create({
+            data: {
+              id,
+              patientId: created.id,
+              userId,
+            },
+          }),
+        tx,
+      )
+
+      const nonAssure = await findNonAssureAssurance(tx)
+      if (nonAssure) {
+        await insertWithNextId(
+          'assurance_patient',
+          (id) =>
+            tx.assurancePatient.create({
+              data: {
+                id,
+                patientId: created.id,
+                assuranceId: nonAssure.id,
+                tauxCouverture: 0,
+              },
+            }),
+          tx,
+        )
+      }
+
+      return created
     })
 
-    await tx.wallet.create({
-      data: {
-        patientId: created.id,
-        userId,
-      },
+    notifyEventAsync({
+      type: 'PATIENT_CREE',
+      message: `Nouveau patient créé : ${formatPatientIdentityLine(
+        String(patient.patName),
+        String(patient.patSurname),
+        Number(patient.sexe),
+        patient.nomJeuneFille != null && String(patient.nomJeuneFille).trim() !== ''
+          ? String(patient.nomJeuneFille)
+          : null,
+      )}`,
+      href: `/patients/${patient.id}`,
+      entityType: 'Patient',
+      entityId: patient.id,
+      actorUserId: userId,
     })
 
-    const nonAssure = await findNonAssureAssurance(tx)
-    if (nonAssure) {
-      await tx.assurancePatient.create({
-        data: {
-          patientId: created.id,
-          assuranceId: nonAssure.id,
-          tauxCouverture: 0,
-        },
-      })
+    return { ok: true, patient: toSerializable(patient) }
+  } catch (e) {
+    return {
+      ok: false,
+      error: prismaWriteErrorMessage(e, 'Impossible de créer le patient.'),
     }
-
-    return created
-  })
-
-  notifyEventAsync({
-    type: 'PATIENT_CREE',
-    message: `Nouveau patient créé : ${formatPatientIdentityLine(
-      String(patient.patName),
-      String(patient.patSurname),
-      Number(patient.sexe),
-      patient.nomJeuneFille != null && String(patient.nomJeuneFille).trim() !== ''
-        ? String(patient.nomJeuneFille)
-        : null,
-    )}`,
-    href: `/patients/${patient.id}`,
-    entityType: 'Patient',
-    entityId: patient.id,
-    actorUserId: userId,
-  })
-
-  return toSerializable(patient)
+  }
 }
 
 const patientAssuranceOnCreateSchema = z.object({
@@ -175,105 +201,144 @@ const createPatientWithAssuranceSchema = z.object({
   assurance: patientAssuranceOnCreateSchema.optional().nullable(),
 })
 
-export async function createPatientWithAssurance(data: unknown) {
-  const user = await requireUser()
-  const userId = user.id
-  const parsed = createPatientWithAssuranceSchema.parse(data)
-  const v = parsed.patient
-  const patNum1 = normalizeWhatsAppPhone(v.patNum1)!
-  const patNum2 =
-    v.patNum2 && v.patNum2.trim() ? normalizeWhatsAppPhone(v.patNum2) : null
-
-  if (parsed.assurance) {
-    const assurance = await prisma.assurance.findUnique({
-      where: { id: BigInt(parsed.assurance.assuranceId) },
-      select: { id: true, promoteurUserId: true },
-    })
-    if (!assurance) throw new Error('Assureur introuvable.')
-    assertCanAssignAssurance(userId, assurance)
-  }
-
-  const patient = await prisma.$transaction(async (tx) => {
-    const created = await tx.patient.create({
-      data: {
-        civilite: v.civilite,
-        patName: v.patName,
-        patSurname: v.patSurname,
-        nomJeuneFille:
-          v.sexe === 2 ? (v.nomJeuneFille?.trim() ? v.nomJeuneFille.trim() : null) : null,
-        patEmail: v.patEmail || null,
-        patDob: v.patDob,
-        patLieuNaiss: v.patLieuNaiss,
-        patCni: v.patCni ?? null,
-        patAdress: v.patAdress,
-        patNum1,
-        patNum2,
-        patProfession: v.patProfession ?? null,
-        sexe: v.sexe,
-      },
-    })
-
-    await tx.wallet.create({
-      data: {
-        patientId: created.id,
-        userId,
-      },
-    })
+export async function createPatientWithAssurance(
+  data: unknown,
+): Promise<{ ok: true; patient: unknown } | { ok: false; error: string }> {
+  try {
+    const user = await requireUser()
+    const userId = user.id
+    const parsed = createPatientWithAssuranceSchema.parse(data)
+    const v = parsed.patient
+    const patNum1 = normalizeWhatsAppPhone(v.patNum1)!
+    const patNum2 =
+      v.patNum2 && v.patNum2.trim() ? normalizeWhatsAppPhone(v.patNum2) : null
 
     if (parsed.assurance) {
-      const a = parsed.assurance
-      const ap = await tx.assurancePatient.create({
-        data: {
-          patientId: created.id,
-          assuranceId: BigInt(a.assuranceId),
-          dateDebut: a.dateDebut ?? null,
-          dateFin: a.dateFin ?? null,
-          numeroAttestation: a.numeroAttestation?.trim() || null,
-          tauxCouverture: a.tauxCouverture,
-        },
+      const assurance = await prisma.assurance.findUnique({
+        where: { id: BigInt(parsed.assurance.assuranceId) },
+        select: { id: true, promoteurUserId: true },
       })
-      for (const c of a.couvertures ?? []) {
-        await tx.assurancePatientCouverture.create({
-          data: {
-            assurancePatientId: ap.id,
-            categorieId: BigInt(c.categorieId),
-            tauxCouverture: c.tauxCouverture,
-          },
-        })
-      }
-    } else {
-      const nonAssure = await findNonAssureAssurance(tx)
-      if (nonAssure) {
-        await tx.assurancePatient.create({
-          data: {
-            patientId: created.id,
-            assuranceId: nonAssure.id,
-            tauxCouverture: 0,
-          },
-        })
-      }
+      if (!assurance) return { ok: false, error: 'Assureur introuvable.' }
+      assertCanAssignAssurance(userId, assurance)
     }
 
-    return created
-  })
+    const patient = await prisma.$transaction(async (tx) => {
+      const created = await insertWithNextId(
+        'patients',
+        (id) =>
+          tx.patient.create({
+            data: {
+              id,
+              civilite: v.civilite,
+              patName: v.patName,
+              patSurname: v.patSurname,
+              nomJeuneFille:
+                v.sexe === 2 ? (v.nomJeuneFille?.trim() ? v.nomJeuneFille.trim() : null) : null,
+              patEmail: v.patEmail || null,
+              patDob: v.patDob,
+              patLieuNaiss: v.patLieuNaiss,
+              patCni: v.patCni ?? null,
+              patAdress: v.patAdress,
+              patNum1,
+              patNum2,
+              patProfession: v.patProfession ?? null,
+              sexe: v.sexe,
+            },
+          }),
+        tx,
+      )
 
-  notifyEventAsync({
-    type: 'PATIENT_CREE',
-    message: `Nouveau patient créé : ${formatPatientIdentityLine(
-      String(patient.patName),
-      String(patient.patSurname),
-      Number(patient.sexe),
-      patient.nomJeuneFille != null && String(patient.nomJeuneFille).trim() !== ''
-        ? String(patient.nomJeuneFille)
-        : null,
-    )}`,
-    href: `/patients/${patient.id}`,
-    entityType: 'Patient',
-    entityId: patient.id,
-    actorUserId: userId,
-  })
+      await insertWithNextId(
+        'wallets',
+        (id) =>
+          tx.wallet.create({
+            data: {
+              id,
+              patientId: created.id,
+              userId,
+            },
+          }),
+        tx,
+      )
 
-  return toSerializable(patient)
+      if (parsed.assurance) {
+        const a = parsed.assurance
+        const ap = await insertWithNextId(
+          'assurance_patient',
+          (id) =>
+            tx.assurancePatient.create({
+              data: {
+                id,
+                patientId: created.id,
+                assuranceId: BigInt(a.assuranceId),
+                dateDebut: a.dateDebut ?? null,
+                dateFin: a.dateFin ?? null,
+                numeroAttestation: a.numeroAttestation?.trim() || null,
+                tauxCouverture: a.tauxCouverture,
+              },
+            }),
+          tx,
+        )
+        for (const c of a.couvertures ?? []) {
+          await insertWithNextId(
+            'assurance_patient_couvertures',
+            (lid) =>
+              tx.assurancePatientCouverture.create({
+                data: {
+                  id: lid,
+                  assurancePatientId: ap.id,
+                  categorieId: BigInt(c.categorieId),
+                  tauxCouverture: c.tauxCouverture,
+                },
+              }),
+            tx,
+          )
+        }
+      } else {
+        const nonAssure = await findNonAssureAssurance(tx)
+        if (nonAssure) {
+          await insertWithNextId(
+            'assurance_patient',
+            (id) =>
+              tx.assurancePatient.create({
+                data: {
+                  id,
+                  patientId: created.id,
+                  assuranceId: nonAssure.id,
+                  tauxCouverture: 0,
+                },
+              }),
+            tx,
+          )
+        }
+      }
+
+      return created
+    })
+
+    notifyEventAsync({
+      type: 'PATIENT_CREE',
+      message: `Nouveau patient créé : ${formatPatientIdentityLine(
+        String(patient.patName),
+        String(patient.patSurname),
+        Number(patient.sexe),
+        patient.nomJeuneFille != null && String(patient.nomJeuneFille).trim() !== ''
+          ? String(patient.nomJeuneFille)
+          : null,
+      )}`,
+      href: `/patients/${patient.id}`,
+      entityType: 'Patient',
+      entityId: patient.id,
+      actorUserId: userId,
+    })
+
+    return { ok: true, patient: toSerializable(patient) }
+  } catch (e) {
+    return {
+      ok: false,
+      error: prismaWriteErrorMessage(e, 'Impossible de créer le patient.'),
+    }
+  }
 }
 
 export async function updatePatient(data: unknown) {

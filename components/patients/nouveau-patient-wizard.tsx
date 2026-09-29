@@ -166,7 +166,7 @@ export function NouveauPatientWizard({
     setPending(true)
     try {
       const taux = Number.parseInt(assuranceForm.tauxCouverture, 10)
-      await createPatientWithAssurance({
+      const res = await createPatientWithAssurance({
         patient: {
           ...patientForm,
           patEmail: patientForm.patEmail || null,
@@ -193,6 +193,10 @@ export function NouveauPatientWizard({
             }
           : null,
       })
+      if (!res.ok) {
+        toast.error(res.error)
+        return
+      }
       toast.success("Patient créé avec succès")
       void queryClient.invalidateQueries({ queryKey: ["patients"] })
       handleOpenChange(false)

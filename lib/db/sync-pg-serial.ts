@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 const SERIAL_TABLES = new Set([
@@ -8,7 +8,15 @@ const SERIAL_TABLES = new Set([
   'encaissements',
   'journal_caisse',
   'versements_caisse',
+  'patients',
+  'wallets',
+  'assurance_patient',
+  'assurance_patient_couvertures',
+  'notifications',
+  'notification_recipients',
 ])
+
+type SqlClient = Pick<PrismaClient, '$queryRawUnsafe'>
 
 function assertSerialTable(table: string) {
   if (!SERIAL_TABLES.has(table)) {
@@ -17,9 +25,9 @@ function assertSerialTable(table: string) {
 }
 
 /** Aligne la séquence PG après un import / seed avec ids explicites. */
-export async function syncPgSerial(table: string) {
+export async function syncPgSerial(table: string, db: SqlClient = prisma) {
   assertSerialTable(table)
-  await prisma.$executeRawUnsafe(`
+  await db.$queryRawUnsafe(`
     SELECT setval(
       COALESCE(
         pg_get_serial_sequence('"${table}"', 'id'),
@@ -32,9 +40,9 @@ export async function syncPgSerial(table: string) {
   `)
 }
 
-export async function nextPgSerialId(table: string): Promise<bigint> {
+export async function nextPgSerialId(table: string, db: SqlClient = prisma): Promise<bigint> {
   assertSerialTable(table)
-  const rows = await prisma.$queryRawUnsafe<Array<{ next_id: bigint | number | string }>>(
+  const rows = await db.$queryRawUnsafe<Array<{ next_id: bigint | number | string }>>(
     `SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM "${table}"`,
   )
   const raw = rows[0]?.next_id ?? 1
@@ -53,4 +61,33 @@ export function isPrismaIdCollision(error: unknown): boolean {
     return target === 'id' || target.includes('pkey')
   }
   return true
+}
+
+export async function insertWithNextId<T>(
+  table: string,
+  create: (id: bigint) => Promise<T>,
+  db: SqlClient = prisma,
+): Promise<T> {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const id = await nextPgSerialId(table, db)
+    try {
+      return await create(id)
+    } catch (error) {
+      if (!isPrismaIdCollision(error) || attempt === 7) throw error
+    }
+  }
+  throw new Error("Impossible d'allouer un identifiant.")
+}
+
+export function prismaWriteErrorMessage(error: unknown, fallback: string): string {
+  if (isPrismaIdCollision(error)) {
+    return `${fallback} Identifiant déjà utilisé — réessayez.`
+  }
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return fallback
+  }
+  if (error instanceof Error && error.message && !error.message.includes('digest')) {
+    return error.message
+  }
+  return fallback
 }

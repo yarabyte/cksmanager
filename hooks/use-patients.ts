@@ -56,7 +56,11 @@ export function usePatientMutations() {
   }
 
   const create = useMutation({
-    mutationFn: createPatient,
+    mutationFn: async (data: unknown) => {
+      const res = await createPatient(data)
+      if (!res.ok) throw new Error(res.error)
+      return res.patient
+    },
     onSuccess: invalidatePatientQueries,
   })
   const update = useMutation({
