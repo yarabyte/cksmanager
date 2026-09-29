@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
+import { syncPgSerial } from '@/lib/db/sync-pg-serial'
 import { toSerializable } from '@/lib/json-bigint'
 import { requireUser, requireUserId } from '@/lib/auth/session'
 import { hasPermissionForRoles } from '@/lib/permissions-server'
@@ -179,6 +180,7 @@ export async function openCaisseSession(
       return { ok: false, error: 'Ce poste est déjà utilisé par un autre caissier.' }
     }
 
+    await syncPgSerial('caisse_sessions')
     const session = await prisma.caisseSession.create({
       data: {
         posteId,
