@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { toSerializable } from '@/lib/json-bigint'
 import { requirePermission } from '@/lib/permissions-guard'
-import { requirePermission } from '@/lib/permissions-guard'
 import {
   getFeuillesInConfirmedFactureIds,
   resolvePatientLabels,
