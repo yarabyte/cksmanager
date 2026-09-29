@@ -80,7 +80,7 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     dashboard: ["view"],
     patients: ["view", "create", "edit"],
     visites: ["view", "create"],
-    feuilleCirculation: [],
+    feuilleCirculation: ["view", "create", "edit"],
     prescriptions: [],
     facturation: ["view"],
     pharmacie: [],

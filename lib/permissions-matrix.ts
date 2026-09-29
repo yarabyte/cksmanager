@@ -179,6 +179,12 @@ function mergeAbsentModules(matrix: PermissionMatrix): PermissionMatrix {
     if (!HOSPITALISATION_ROLES.has(role)) {
       row.hospitalisation = []
     }
+    if (role === "Front Office") {
+      const feuille = row.feuilleCirculation ?? []
+      if (feuille.length === 0) {
+        row.feuilleCirculation = ["view", "create", "edit"]
+      }
+    }
     out[role] = row
   }
   return out
