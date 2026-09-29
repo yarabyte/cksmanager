@@ -213,6 +213,9 @@ export async function openCaisseSession(
 
     return { ok: true, sessionId: session.id.toString() }
   } catch (e) {
+    if (isPrismaIdCollision(e)) {
+      return { ok: false, error: "Impossible d'ouvrir la caisse. Réessayez." }
+    }
     return {
       ok: false,
       error: e instanceof Error ? e.message : 'Erreur lors de l\'ouverture.',
