@@ -18,6 +18,7 @@ import {
   Headphones,
   Wallet,
   Pill,
+  Baby,
   Loader2,
   Save,
   RotateCcw,
@@ -67,6 +68,7 @@ import {
   ALL_MODULES,
   ALL_ROLES,
   countModulePermissions,
+  VIEW_ONLY_MODULES,
   countRolePermissionsFromMatrix,
   getPermissionsForRoleFromMatrix,
 } from "@/lib/permissions"
@@ -104,6 +106,8 @@ function roleAccent(role: Role): string {
       return "#7c3aed"
     case "Médecin":
       return "#2563eb"
+    case "Sage femme":
+      return "#e11d48"
     case "Front Office":
       return "#d97706"
     case "Caisse":
@@ -138,6 +142,12 @@ const ROLE_VISUAL: Record<
     chipBg: "bg-blue-50",
     chipText: "text-blue-700",
     chipBorder: "border-blue-200",
+  },
+  "Sage femme": {
+    icon: Baby,
+    chipBg: "bg-rose-50",
+    chipText: "text-rose-700",
+    chipBorder: "border-rose-200",
   },
   "Front Office": {
     icon: Headphones,
@@ -437,7 +447,7 @@ function ModulePermissionCard({
   const meta = MODULE_META[module]
   const Icon = meta.icon
   const hasAccess = grantedActions.length > 0
-  const actions = module === "dashboard" ? (["view"] as Action[]) : ALL_ACTIONS
+  const actions = VIEW_ONLY_MODULES.includes(module) ? (["view"] as Action[]) : ALL_ACTIONS
 
   return (
     <div

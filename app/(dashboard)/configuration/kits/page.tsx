@@ -57,7 +57,7 @@ import {
   ListOrdered,
 } from "lucide-react"
 import { useKitActesList, useKitActeMutations } from "@/hooks/use-kits"
-import { listUsersForConfig } from "@/app/actions/users"
+import { listActiveUsersForSelect } from "@/app/actions/users"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -215,8 +215,8 @@ export default function KitsConfigurationPage() {
   const rangeTo = Math.min(skip + pageSize, total)
 
   const { data: usersRaw } = useQuery({
-    queryKey: ["users", "config", "kits-dropdown"],
-    queryFn: () => listUsersForConfig(),
+    queryKey: ["users", "active-select", "kits-dropdown"],
+    queryFn: () => listActiveUsersForSelect(),
   })
   const users = usersRaw ?? []
 

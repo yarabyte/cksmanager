@@ -23,6 +23,8 @@ import { payFromWalletInTx } from '@/app/actions/wallets'
 import { notifyEncaissement } from '@/lib/whatsapp/notify'
 import { notifyEventAsync } from '@/lib/notifications/create-notification'
 import { formatFactureNumero } from '@/lib/formatting'
+import { ensureFactureAndEnqueueBac } from '@/lib/facture/auto-from-encaissement'
+import { hasHospitalisationEnCoursForVisite } from '@/lib/hospitalisation/helpers'
 import type {
   CaisseEnAttenteItem,
   CaisseStats,
@@ -607,10 +609,42 @@ async function encaisser(
       return enc.id
     })
 
+    // Bac / facture auto : après le paiement, pour ne jamais bloquer le reçu matriciel
+    // Hospitalisation en cours : reçu oui, pas de facture (regroupement à la sortie — v2)
+    try {
+      let skipBac = false
+      if (v.type === 'FEUILLE') {
+        const feuille = await prisma.feuilleCirculation.findUnique({
+          where: { id: BigInt(v.id) },
+          select: { visiteId: true },
+        })
+        if (
+          feuille &&
+          (await hasHospitalisationEnCoursForVisite(feuille.visiteId))
+        ) {
+          skipBac = true
+        }
+      }
+      if (!skipBac) {
+        await prisma.$transaction(async (tx) => {
+          await ensureFactureAndEnqueueBac(tx, {
+            type: v.type,
+            sourceId: BigInt(v.id),
+            encaissementId,
+            userId,
+          })
+        })
+      }
+    } catch (err) {
+      console.error('[bac-facture] enqueue après encaissement:', err)
+    }
+
     revalidatePath('/caisse')
     revalidatePath('/facturation')
+    revalidatePath('/facturation/bac')
     revalidatePath('/feuilles-circulation')
     revalidatePath('/prescriptions')
+    revalidatePath('/hospitalisation')
 
     const encId = encaissementId.toString()
     void notifyEncaissement(encId).catch((err) => console.error('[whatsapp] encaissement:', err))
@@ -680,10 +714,18 @@ export async function getJournalCaisseJour(
   }
 
   const dateFilter = buildJournalDateFilter(periode, filters.dateFrom, filters.dateTo)
+  // Sur la page caisse (période session), n'afficher que la journée en cours
+  const sessionTodayFilter =
+    periode === 'session'
+      ? {
+          gte: startOfDayDouala(new Date()),
+          lte: endOfDayDouala(new Date()),
+        }
+      : undefined
   const rows = await prisma.journalCaisse.findMany({
     where:
       periode === 'session'
-        ? { sessionId: session.id }
+        ? { sessionId: session.id, createdAt: sessionTodayFilter }
         : {
             session: { posteId: session.posteId },
             ...(dateFilter ? { createdAt: dateFilter } : {}),
@@ -715,6 +757,8 @@ export async function getJournalCaisseJour(
       patientLabel: pl?.label ?? null,
       referenceType: r.referenceType,
       referenceId: r.referenceId ? r.referenceId.toString() : null,
+      encaissementId: r.encaissementId ? r.encaissementId.toString() : null,
+      versementId: r.versementId ? r.versementId.toString() : null,
       createdAt: r.createdAt ? r.createdAt.toISOString() : new Date().toISOString(),
       userName: r.user?.name ?? null,
     }

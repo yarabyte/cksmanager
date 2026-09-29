@@ -4,8 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { toSerializable } from '@/lib/json-bigint'
-import { requireUser } from '@/lib/auth/session'
-import { hasPermissionForRoles } from '@/lib/permissions-server'
+import { currentUserHasPermission, requirePermission } from '@/lib/permissions-guard'
 import type { CaissePosteRow } from '@/lib/types/caisse-session'
 
 const posteSchema = z.object({
@@ -17,8 +16,7 @@ const posteSchema = z.object({
 export async function listCaissePostesForAssignment(): Promise<
   { id: string; nom: string }[]
 > {
-  const user = await requireUser()
-  if (!(await hasPermissionForRoles(user.roles, 'configuration', 'view'))) {
+  if (!(await currentUserHasPermission('configuration', 'view'))) {
     throw new Error('Accès refusé.')
   }
 
@@ -34,10 +32,9 @@ export async function listCaissePostesForAssignment(): Promise<
 }
 
 export async function listCaissePostes(): Promise<CaissePosteRow[]> {
-  const user = await requireUser()
   if (
-    !(await hasPermissionForRoles(user.roles, 'configuration', 'view')) &&
-    !user.roles.includes('Caisse')
+    !(await currentUserHasPermission('configuration', 'view')) &&
+    !(await currentUserHasPermission('caisse', 'view'))
   ) {
     throw new Error('Accès refusé.')
   }
@@ -73,10 +70,7 @@ export async function createCaissePoste(
   data: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const user = await requireUser()
-    if (!(await hasPermissionForRoles(user.roles, 'configuration', 'create'))) {
-      return { ok: false, error: 'Accès refusé.' }
-    }
+    await requirePermission('configuration', 'create')
     const v = posteSchema.parse(data)
     await prisma.caissePoste.create({
       data: {
@@ -100,10 +94,7 @@ export async function updateCaissePoste(
   data: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const user = await requireUser()
-    if (!(await hasPermissionForRoles(user.roles, 'configuration', 'edit'))) {
-      return { ok: false, error: 'Accès refusé.' }
-    }
+    await requirePermission('configuration', 'edit')
     const v = posteSchema.parse(data)
     await prisma.caissePoste.update({
       where: { id: BigInt(id) },

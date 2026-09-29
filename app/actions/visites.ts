@@ -258,7 +258,7 @@ export type MedecinOption = { id: string; nom: string; titre: string | null }
 
 export async function listMedecins(): Promise<MedecinOption[]> {
   const rows = await prisma.user.findMany({
-    where: { role: { in: ['medecins', 'MEDECIN'] } },
+    where: { actif: true, role: { in: ['medecins', 'MEDECIN'] } },
     orderBy: { name: 'asc' },
   })
   return rows.map((u) => ({ id: u.id.toString(), nom: u.name, titre: u.titre }))

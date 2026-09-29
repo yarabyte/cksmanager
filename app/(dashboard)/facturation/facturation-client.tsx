@@ -2,11 +2,15 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { toast } from "sonner"
 import {
+  Building2,
   CheckCircle2,
   Columns3,
+  Download,
   Eye,
   FilePen,
+  FileStack,
   Filter,
   Plus,
   Receipt,
@@ -49,7 +53,7 @@ import {
   resolveFacturePaiementStatus,
   type FacturePaiementGlobal,
 } from "@/lib/facture/paiement-status"
-import { formatCurrency, formatDateTime, formatFactureNumero } from "@/lib/formatting"
+import { formatCurrency, formatDate, formatDateTime, formatFactureNumero } from "@/lib/formatting"
 import { cn } from "@/lib/utils"
 import type { FactureListRow } from "@/lib/types/facture"
 
@@ -114,9 +118,18 @@ function dateOnly(iso: string | null): string | null {
 export function FacturationClient({
   factures,
   showBordereaux = false,
+  title = "Facturation",
+  description = "Regroupement de feuilles de circulation confirmées d'une même visite (minimum une feuille validée).",
+  showNewButton = true,
+  view = "all",
 }: {
   factures: FactureListRow[]
   showBordereaux?: boolean
+  title?: string
+  description?: string
+  showNewButton?: boolean
+  /** Variante d'affichage (cartes / totaux). */
+  view?: "all" | "recouvrement" | "paye"
 }) {
   const [searchQuery, setSearchQuery] = React.useState("")
   const [paiementFilter, setPaiementFilter] = React.useState("all")
@@ -214,7 +227,9 @@ export function FacturationClient({
     (assuranceId !== "all" ? 1 : 0) +
     (dateDebut !== "" ? 1 : 0) +
     (dateFin !== "" ? 1 : 0)
-  const montantAffiche = filtered.reduce((s, f) => s + f.montantPatient, 0)
+  const montantPatientAffiche = filtered.reduce((s, f) => s + f.montantPatient, 0)
+  const montantAssuranceAffiche = filtered.reduce((s, f) => s + f.montantAssurance, 0)
+  const montantTotalAffiche = montantPatientAffiche + montantAssuranceAffiche
 
   function resetFilters() {
     setSearchQuery("")
@@ -224,7 +239,78 @@ export function FacturationClient({
     setDateFin("")
   }
 
-  const statCards = [
+  function exportExcel() {
+    if (filtered.length === 0) {
+      toast.error("Aucune facture à exporter")
+      return
+    }
+    const headers = [
+      "N° facture",
+      "Patient",
+      "Assureur",
+      "Feuilles",
+      "Paiement",
+      "Part patient",
+      "Part assurance",
+      "Créée le",
+    ]
+    const rows = filtered.map((f) => {
+      const paiement = paiementOf(f)
+      return [
+        formatFactureNumero(f.numero),
+        f.patientLabel ?? `Patient #${f.patientId}`,
+        f.suiviAssureur?.assuranceNom ?? "—",
+        String(f.nbFeuilles),
+        PAIEMENT_GLOBAL_LABEL[paiement.global],
+        String(f.montantPatient),
+        String(f.montantAssurance),
+        f.createdAt ? formatDate(f.createdAt) : "—",
+      ]
+    })
+
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
+    const csv =
+      "﻿" +
+      [headers, ...rows].map((r) => r.map(escape).join(";")).join("\n")
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `facturation-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success("Export Excel téléchargé")
+  }
+
+  const payeStatCards = [
+    {
+      key: "total",
+      label: "Factures payées",
+      icon: Receipt,
+      value: String(filtered.length),
+    },
+    {
+      key: "patient",
+      label: "Total payé patient",
+      icon: Wallet,
+      value: formatCurrency(montantPatientAffiche),
+    },
+    {
+      key: "assureur",
+      label: "Total payé assureur",
+      icon: Building2,
+      value: formatCurrency(montantAssuranceAffiche),
+    },
+    {
+      key: "global",
+      label: "Total payé",
+      icon: CheckCircle2,
+      value: formatCurrency(montantTotalAffiche),
+    },
+  ] as const
+
+  const defaultStatCards = [
     { key: "total" as const, label: "Total factures", icon: Receipt, value: stats.total },
     { key: "brouillons" as const, label: "Brouillons", icon: FilePen, value: stats.brouillons },
     { key: "aEncaisser" as const, label: "À encaisser", icon: Wallet, value: stats.aEncaisser },
@@ -236,6 +322,8 @@ export function FacturationClient({
     },
   ]
 
+  const statCards = view === "paye" ? payeStatCards : defaultStatCards
+
   const headClass =
     "text-[11px] font-bold text-gray-500 uppercase tracking-wide py-3"
 
@@ -243,35 +331,43 @@ export function FacturationClient({
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">Facturation</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Regroupement de feuilles de circulation confirmées d&apos;une même visite (minimum une
-            feuille validée).
-          </p>
+          <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">{title}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{description}</p>
         </div>
-        <Button
-          asChild
-          className="gap-2 bg-gradient-to-r from-[#cd3b86] to-[#b8307a] hover:from-[#b8307a] hover:to-[#9b2563] text-white shadow-sm transition-all"
-        >
-          <Link href="/facturation/nouvelle">
-            <Plus className="h-4 w-4" />
-            Nouvelle facture
-          </Link>
-        </Button>
+        {showNewButton ? (
+          <Button
+            asChild
+            className="gap-2 bg-gradient-to-r from-[#cd3b86] to-[#b8307a] hover:from-[#b8307a] hover:to-[#9b2563] text-white shadow-sm transition-all"
+          >
+            <Link href="/facturation/nouvelle">
+              <Plus className="h-4 w-4" />
+              Nouvelle facture
+            </Link>
+          </Button>
+        ) : null}
       </div>
 
-      {showBordereaux ? <FacturationTabs showBordereaux /> : null}
+      <FacturationTabs showBordereaux={showBordereaux} />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {statCards.map(({ key, label, icon: Icon, value }) => (
           <Card key={key} className="border border-gray-100 shadow-sm rounded-2xl bg-white">
             <CardContent className="px-4 py-3">
               <div className="flex items-center justify-between gap-2">
-                <div>
+                <div className="min-w-0">
                   <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">
                     {label}
                   </p>
-                  <p className="text-2xl font-extrabold text-gray-900 mt-1 tabular-nums">{value}</p>
+                  <p
+                    className={cn(
+                      "font-extrabold text-gray-900 mt-1 tabular-nums",
+                      typeof value === "string" && value.length > 10
+                        ? "text-lg sm:text-xl"
+                        : "text-2xl",
+                    )}
+                  >
+                    {value}
+                  </p>
                 </div>
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#cd3b86]/8 text-[#cd3b86]">
                   <Icon className="h-4 w-4" />
@@ -378,6 +474,17 @@ export function FacturationClient({
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={exportExcel}
+                className="h-9 gap-1.5 text-xs bg-gray-50 border-gray-200 rounded-lg"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Excel
+              </Button>
+
               {hasFilters && (
                 <div className="flex items-center gap-1.5">
                   <span className="flex items-center gap-1 text-xs font-semibold text-[#cd3b86] bg-[#cd3b86]/8 border border-[#cd3b86]/20 px-2 py-1 rounded-full">
@@ -425,8 +532,31 @@ export function FacturationClient({
             : `${filtered.length} facture${filtered.length > 1 ? "s" : ""}${hasFilters ? " (filtrées)" : ""}`}
         </p>
         <p className="text-[11px] text-gray-400 font-medium">
-          Part patient affichée :{" "}
-          <span className="font-semibold text-gray-600">{formatCurrency(montantAffiche)}</span>
+          {view === "paye" ? (
+            <>
+              Patient{" "}
+              <span className="font-semibold text-gray-600">
+                {formatCurrency(montantPatientAffiche)}
+              </span>
+              {" · "}
+              Assureur{" "}
+              <span className="font-semibold text-gray-600">
+                {formatCurrency(montantAssuranceAffiche)}
+              </span>
+              {" · "}
+              Total{" "}
+              <span className="font-semibold text-emerald-700">
+                {formatCurrency(montantTotalAffiche)}
+              </span>
+            </>
+          ) : (
+            <>
+              Part patient affichée :{" "}
+              <span className="font-semibold text-gray-600">
+                {formatCurrency(montantPatientAffiche)}
+              </span>
+            </>
+          )}
         </p>
       </div>
 
@@ -540,17 +670,39 @@ export function FacturationClient({
                         </TableCell>
                       )}
                       <TableCell className="py-3">
-                        <Button
-                          asChild
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 gap-1 text-xs text-gray-400 hover:text-gray-600 px-2"
-                        >
-                          <Link href={`/facturation/${f.id}`}>
-                            <Eye className="h-3.5 w-3.5" />
-                            Voir
-                          </Link>
-                        </Button>
+                        <div className="flex items-center gap-0.5">
+                          {f.suiviAssureur?.bordereauId ? (
+                            <Button
+                              asChild
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-gray-400 hover:text-[#cd3b86]"
+                              title={
+                                f.suiviAssureur.bordereauNumero
+                                  ? `Voir dans ${f.suiviAssureur.bordereauNumero}`
+                                  : "Voir dans le bordereau"
+                              }
+                            >
+                              <Link
+                                href={`/facturation/bordereaux/${f.suiviAssureur.bordereauId}?facture=${f.id}`}
+                              >
+                                <FileStack className="h-3.5 w-3.5" />
+                                <span className="sr-only">Voir dans le bordereau</span>
+                              </Link>
+                            </Button>
+                          ) : null}
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1 text-xs text-gray-400 hover:text-gray-600 px-2"
+                          >
+                            <Link href={`/facturation/${f.id}`}>
+                              <Eye className="h-3.5 w-3.5" />
+                              Voir
+                            </Link>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )

@@ -8,6 +8,7 @@ const legacyRoleToken = z.enum([
   "caisse",
   "pharmacie",
   "commis_pharmacie",
+  "sage_femme",
 ])
 
 export const userUpdateSchema = z.object({
@@ -27,6 +28,27 @@ export const userUpdateSchema = z.object({
   actif: z.boolean(),
   caissePosteId: z.string().regex(/^\d+$/).nullable().optional(),
   pharmacieId: z.string().regex(/^\d+$/).nullable().optional(),
+  /** Laissé vide = mot de passe inchangé. */
+  password: z.string().optional(),
+  passwordConfirm: z.string().optional(),
+}).superRefine((data, ctx) => {
+  const password = data.password?.trim() ?? ""
+  const confirm = data.passwordConfirm?.trim() ?? ""
+  if (!password && !confirm) return
+  if (password.length < 8) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["password"],
+      message: "Le mot de passe doit contenir au moins 8 caractères.",
+    })
+  }
+  if (password !== confirm) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["passwordConfirm"],
+      message: "Les mots de passe ne correspondent pas.",
+    })
+  }
 })
 
 export type UserUpdateValues = z.infer<typeof userUpdateSchema>

@@ -8,7 +8,7 @@ import { ArrowLeft, Download, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { formatCurrency, formatBirthAge, formatFactureNumero } from "@/lib/formatting"
-import { encaissementTypeLabel } from "@/lib/facture/payment-history"
+import { encaissementTypeLabel } from "@/lib/facture/encaissement-labels"
 import { formatCategorieLabel } from "@/components/shared/categorie-icon"
 import type { FactureFeuilleResume, FacturePrintData } from "@/lib/types/facture"
 import type { FeuilleLigneRow } from "@/lib/types/feuille-circulation"
@@ -161,7 +161,7 @@ function FeuilleLignesTable({
   return (
     <div>
       <p className="fp-section-title">
-        Feuille {feuille.numero}
+        {feuille.kind === "prescription" ? "Prescription" : "Feuille"} {feuille.numero}
         {feuille.libelle ? ` — ${feuille.libelle}` : ""}
       </p>
       <table className="fp-table">
@@ -384,9 +384,14 @@ function FacturePage({
 export function FacturePrintClient({
   facture,
   parametres,
+  bacItemId,
+  backHref,
 }: {
   facture: FacturePrintData
   parametres: PrintParametres
+  /** Si défini, marque l'élément du bac comme imprimé après téléchargement PDF. */
+  bacItemId?: string
+  backHref?: string
 }) {
   const router = useRouter()
   const documentRef = React.useRef<HTMLDivElement>(null)
@@ -394,6 +399,7 @@ export function FacturePrintClient({
   const hasAutoDownloaded = React.useRef(false)
 
   const pdfFilename = `facture-${formatFactureNumero(facture.numero).replace(/[#/\s]+/g, "-")}.pdf`
+  const retourHref = backHref ?? `/facturation/${facture.id}`
 
   const handleDownload = React.useCallback(async () => {
     if (!documentRef.current || downloading) return
@@ -408,12 +414,22 @@ export function FacturePrintClient({
         pageWidthMm: FACTURE_PDF_PAGE_WIDTH_MM,
       })
       toast.success("PDF téléchargé")
+      if (bacItemId) {
+        const { markBacFactureImprime } = await import("@/app/actions/bac-factures")
+        const res = await markBacFactureImprime(bacItemId)
+        if (res.ok) {
+          router.push("/facturation/bac")
+          router.refresh()
+        } else {
+          toast.error(res.error)
+        }
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Échec du téléchargement PDF")
     } finally {
       setDownloading(false)
     }
-  }, [downloading, pdfFilename])
+  }, [downloading, pdfFilename, bacItemId, router])
 
   React.useEffect(() => {
     if (hasAutoDownloaded.current) return
@@ -429,7 +445,7 @@ export function FacturePrintClient({
       <div className="no-print mx-auto mb-4 flex max-w-[210mm] items-center justify-between px-4">
         <button
           type="button"
-          onClick={() => router.push(`/facturation/${facture.id}`)}
+          onClick={() => router.push(retourHref)}
           className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800"
         >
           <ArrowLeft className="h-4 w-4" />

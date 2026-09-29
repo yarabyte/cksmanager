@@ -10,7 +10,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { useCommandState } from "cmdk"
 import {
   Command,
   CommandEmpty,
@@ -137,7 +136,7 @@ export function Combobox({
   creatable = false,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
-  const [listKey, setListKey] = React.useState(0)
+  const [search, setSearch] = React.useState("")
 
   const selected = React.useMemo(() => {
     if (!value) return undefined
@@ -224,7 +223,7 @@ export function Combobox({
       open={open}
       onOpenChange={(next) => {
         setOpen(next)
-        if (!next) setListKey((k) => k + 1)
+        if (!next) setSearch("")
       }}
     >
       <PopoverTrigger asChild>
@@ -292,11 +291,14 @@ export function Combobox({
         collisionPadding={12}
       >
         <Command
-          key={listKey}
           filter={comboboxCommandFilter}
           className="flex min-h-0 flex-1 flex-col overflow-hidden"
         >
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput
+            placeholder={searchPlaceholder}
+            value={search}
+            onValueChange={setSearch}
+          />
           <CommandList className="max-h-[min(280px,calc(var(--radix-popover-content-available-height)-2.75rem))] min-h-0 overflow-y-auto">
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             {/* Ungrouped */}
@@ -310,6 +312,7 @@ export function Combobox({
                     disabled={opt.disabled}
                     onSelect={() => {
                       onChange?.(opt.value === value ? undefined : opt.value)
+                      setSearch("")
                       setOpen(false)
                     }}
                     className={commandItemClass}
@@ -332,6 +335,7 @@ export function Combobox({
                       disabled={opt.disabled}
                       onSelect={() => {
                         onChange?.(opt.value === value ? undefined : opt.value)
+                        setSearch("")
                         setOpen(false)
                       }}
                       className={commandItemClass}
@@ -345,8 +349,10 @@ export function Combobox({
             {creatable ? (
               <ComboboxCreatableRow
                 options={options}
+                search={search}
                 onPick={(text) => {
                   onChange?.(text)
+                  setSearch("")
                   setOpen(false)
                 }}
               />
@@ -360,15 +366,24 @@ export function Combobox({
 
 function ComboboxCreatableRow({
   options,
+  search,
   onPick,
 }: {
   options: ComboboxOption[]
+  search: string
   onPick: (text: string) => void
 }) {
-  const search = useCommandState((s) => s.search)
-  const filteredCount = useCommandState((s) => s.filtered.count)
   const q = search.trim()
-  if (!q || filteredCount > 0) return null
+  if (!q) return null
+  const hasMatch = options.some(
+    (opt) =>
+      comboboxCommandFilter(
+        comboboxItemSearchValue(opt),
+        q,
+        comboboxItemKeywords(opt),
+      ) > 0,
+  )
+  if (hasMatch) return null
   const exists = options.some(
     (o) =>
       o.value === q ||

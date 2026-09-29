@@ -3,11 +3,12 @@ import {
   ALL_ACTIONS,
   ALL_MODULES,
   ALL_ROLES,
+  VIEW_ONLY_MODULES,
   normalizePermissionMatrix,
   type PermissionMatrix,
 } from "./permissions-matrix"
 
-export { ALL_ROLES, ALL_MODULES, ALL_ACTIONS }
+export { ALL_ROLES, ALL_MODULES, ALL_ACTIONS, VIEW_ONLY_MODULES }
 export type { PermissionMatrix }
 
 export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMatrix({
@@ -21,6 +22,11 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     pharmacie: ["view", "create", "edit", "delete"],
     caisse: ["view", "create", "edit", "delete"],
     configuration: ["view", "create", "edit", "delete"],
+    rapports: ["view"],
+    assurances: ["view", "create", "edit", "delete"],
+    medical: ["view", "create", "edit", "delete"],
+    planning: ["view", "create", "edit", "delete"],
+    hospitalisation: ["view", "create", "edit", "delete"],
   },
   Manager: {
     dashboard: ["view"],
@@ -32,6 +38,11 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     pharmacie: ["view", "create", "edit"],
     caisse: ["view"],
     configuration: ["view", "create", "edit"],
+    rapports: ["view"],
+    assurances: ["view", "create", "edit"],
+    medical: ["view", "create", "edit"],
+    planning: ["view", "create", "edit"],
+    hospitalisation: ["view", "create", "edit"],
   },
   Médecin: {
     dashboard: ["view"],
@@ -43,6 +54,27 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     pharmacie: ["view"],
     caisse: [],
     configuration: [],
+    rapports: [],
+    assurances: [],
+    medical: ["view", "create", "edit"],
+    planning: ["view", "create", "edit"],
+    hospitalisation: [],
+  },
+  "Sage femme": {
+    dashboard: ["view"],
+    patients: ["view", "create", "edit"],
+    visites: ["view", "create", "edit"],
+    feuilleCirculation: ["view", "create", "edit"],
+    prescriptions: ["view", "create", "edit"],
+    facturation: ["view"],
+    pharmacie: ["view"],
+    caisse: [],
+    configuration: [],
+    rapports: [],
+    assurances: [],
+    medical: ["view", "create", "edit"],
+    planning: ["view", "create", "edit"],
+    hospitalisation: ["view", "create", "edit"],
   },
   "Front Office": {
     dashboard: ["view"],
@@ -54,6 +86,11 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     pharmacie: [],
     caisse: [],
     configuration: [],
+    rapports: [],
+    assurances: [],
+    medical: [],
+    planning: ["view", "create", "edit"],
+    hospitalisation: [],
   },
   Caisse: {
     dashboard: ["view"],
@@ -65,6 +102,11 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     pharmacie: [],
     caisse: ["view", "create", "edit"],
     configuration: [],
+    rapports: [],
+    assurances: ["view", "create", "edit"],
+    medical: [],
+    planning: [],
+    hospitalisation: [],
   },
   Pharmacie: {
     dashboard: ["view"],
@@ -76,6 +118,11 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     pharmacie: ["view", "create", "edit"],
     caisse: [],
     configuration: [],
+    rapports: [],
+    assurances: [],
+    medical: [],
+    planning: [],
+    hospitalisation: [],
   },
   "Commis Pharmacie": {
     dashboard: ["view"],
@@ -87,6 +134,11 @@ export const DEFAULT_PERMISSION_MATRIX: PermissionMatrix = normalizePermissionMa
     pharmacie: ["view", "create", "edit"],
     caisse: [],
     configuration: [],
+    rapports: [],
+    assurances: [],
+    medical: [],
+    planning: [],
+    hospitalisation: [],
   },
 })
 

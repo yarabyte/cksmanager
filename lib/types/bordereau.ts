@@ -1,6 +1,10 @@
-export type BordereauStatut = 'BROUILLON' | 'DEPOSE' | 'PAYE'
+/** Statut agrégé du bordereau (dérivé des lignes facture). */
+export type BordereauStatut = 'BROUILLON' | 'PARTIEL' | 'DEPOSE' | 'PAYE'
 
-/** Suivi assureur dérivé du bordereau lié à une facture. */
+/** Statut assureur d'une ligne facture dans un bordereau. */
+export type BordereauFactureStatut = 'EN_BORDEREAU' | 'DEPOSE' | 'PAYE'
+
+/** Suivi assureur dérivé de la ligne bordereau liée à une facture. */
 export type FactureSuiviAssureurStatut =
   | 'A_DEPOSER'
   | 'EN_BORDEREAU'
@@ -38,6 +42,11 @@ export type BordereauFactureRow = {
   dateVisite: string | null
   montantAssurance: number
   statutFacture: string
+  /** Suivi assureur de cette ligne */
+  statutAssureur: BordereauFactureStatut
+  dateDepot: string | null
+  datePaiement: string | null
+  refVirement: string | null
 }
 
 export type BordereauDetail = {

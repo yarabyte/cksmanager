@@ -204,10 +204,12 @@ model User {
   prescriptionsCreees  Prescription[]           @relation("PrescriptionUser")
   prescriptionsMedecin Prescription[]           @relation("PrescriptionMedecin")
   prescriptionLignes   PrescriptionLigne[]
+  hospitalisations     Hospitalisation[]
   wallets             Wallet[]
   walletTransactions  WalletTransaction[]
   factures            Facture[]
   encaissements       Encaissement[]
+  bacFactures         BacFacture[]
   journalCaisse       JournalCaisse[]
   caisseSessions      CaisseSession[]
   versementsCaisse    VersementCaisse[]
@@ -270,6 +272,7 @@ model Visite {
   feuillesCirculation FeuilleCirculation[]
   prescriptions       Prescription[]
   factures            Facture[]
+  hospitalisation     Hospitalisation?
   parametrePatient              ParametrePatient?
   antecedentPatient             AntecedentPatient?
   observationGynecologique      ObservationGynecologique?
@@ -281,6 +284,33 @@ model Visite {
   @@index([medecinId])
   @@index([dateVisite])
   @@map("visites")
+}
+
+/// Séjour hospitalier lié à une visite (1:1).
+model Hospitalisation {
+  id           BigInt    @id @default(autoincrement())
+  visiteId     BigInt    @unique @map("visite_id")
+  /// Dénormalisé pour listes / détection caisse
+  patientId    BigInt    @map("patient_id")
+  dateEntree   DateTime  @map("date_entree") @db.Date
+  dateSortie   DateTime? @map("date_sortie") @db.Date
+  /// EN_COURS | SORTI
+  statut       String    @default("EN_COURS") @db.VarChar(20)
+  /// Facture unique créée à la sortie (optionnelle)
+  factureId    BigInt?   @unique @map("facture_id")
+  commentaires String?   @db.Text
+  userId       BigInt    @map("user_id")
+  createdAt    DateTime? @default(now()) @map("created_at")
+  updatedAt    DateTime? @updatedAt @map("updated_at")
+
+  visite  Visite   @relation(fields: [visiteId], references: [id], onDelete: Restrict)
+  user    User     @relation(fields: [userId], references: [id])
+  facture Facture? @relation(fields: [factureId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@index([statut])
+  @@index([dateSortie])
+  @@map("hospitalisations")
 }
 
 /// Constantes / paramètres cliniques saisis pour une visite (1 fiche max)
@@ -1041,6 +1071,7 @@ model Prescription {
   user          User                 @relation("PrescriptionUser", fields: [userId], references: [id])
   lignes        PrescriptionLigne[]
   encaissements Encaissement[]
+  factureLiens  FacturePrescription[]
 
   @@index([visiteId])
   @@index([medecinId])
@@ -1141,10 +1172,13 @@ model Facture {
   visite          Visite           @relation(fields: [visiteId], references: [id], onDelete: Cascade)
   user            User             @relation(fields: [userId], references: [id])
   assurance       Assurance?       @relation(fields: [assuranceId], references: [id], onDelete: SetNull)
-  feuilles        FactureFeuille[]
-  encaissements   Encaissement[]
+  feuilles         FactureFeuille[]
+  prescriptions    FacturePrescription[]
+  encaissements    Encaissement[]
+  bacFactures      BacFacture[]
   bordereauFacture BordereauFacture?
   sortiesPharmacie SortiePharmacie[]
+  hospitalisation  Hospitalisation?
 
   @@index([visiteId])
   @@index([patientId])
@@ -1158,7 +1192,7 @@ model BordereauAssureur {
   id           BigInt    @id @default(autoincrement())
   numero       String    @unique @db.VarChar(50)
   assuranceId  BigInt    @map("assurance_id")
-  /// BROUILLON | DEPOSE | PAYE
+  /// BROUILLON | PARTIEL | DEPOSE | PAYE
   statut       String    @default("BROUILLON") @db.VarChar(20)
   montantTotal Decimal   @default(0) @map("montant_total") @db.Decimal(12, 2)
   dateDepot    DateTime? @map("date_depot") @db.Date
@@ -1183,14 +1217,21 @@ model BordereauAssureur {
 }
 
 model BordereauFacture {
-  bordereauId      BigInt  @map("bordereau_id")
-  factureId        BigInt  @unique @map("facture_id")
-  montantAssurance Decimal @map("montant_assurance") @db.Decimal(12, 2)
+  bordereauId      BigInt    @map("bordereau_id")
+  factureId        BigInt    @unique @map("facture_id")
+  montantAssurance Decimal   @map("montant_assurance") @db.Decimal(12, 2)
+  /// EN_BORDEREAU | DEPOSE | PAYE — suivi assureur au niveau facture
+  statut           String    @default("EN_BORDEREAU") @db.VarChar(20)
+  dateDepot        DateTime? @map("date_depot") @db.Date
+  noteDepot        String?   @map("note_depot") @db.Text
+  datePaiement     DateTime? @map("date_paiement") @db.Date
+  refVirement      String?   @map("ref_virement") @db.VarChar(100)
 
   bordereau BordereauAssureur @relation(fields: [bordereauId], references: [id], onDelete: Cascade)
   facture   Facture           @relation(fields: [factureId], references: [id], onDelete: Restrict)
 
   @@id([bordereauId, factureId])
+  @@index([statut])
   @@map("bordereau_factures")
 }
 
@@ -1203,6 +1244,38 @@ model FactureFeuille {
 
   @@id([factureId, feuilleCirculationId])
   @@map("facture_feuilles")
+}
+
+model FacturePrescription {
+  factureId      BigInt @map("facture_id")
+  prescriptionId BigInt @unique @map("prescription_id")
+
+  facture      Facture      @relation(fields: [factureId], references: [id], onDelete: Cascade)
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@id([factureId, prescriptionId])
+  @@map("facture_prescriptions")
+}
+
+/// File d'attente d'impression des factures après encaissement caisse
+model BacFacture {
+  id             BigInt    @id @default(autoincrement())
+  factureId      BigInt    @map("facture_id")
+  encaissementId BigInt?   @unique @map("encaissement_id")
+  /// PENDING | IMPRIME
+  statut         String    @default("PENDING") @db.VarChar(20)
+  printedAt      DateTime? @map("printed_at")
+  userId         BigInt    @map("user_id")
+  createdAt      DateTime? @default(now()) @map("created_at")
+
+  facture      Facture       @relation(fields: [factureId], references: [id], onDelete: Cascade)
+  encaissement Encaissement? @relation(fields: [encaissementId], references: [id], onDelete: SetNull)
+  user         User          @relation(fields: [userId], references: [id])
+
+  @@index([statut])
+  @@index([factureId])
+  @@index([createdAt])
+  @@map("bac_factures")
 }
 
 /// Reçu de caisse (encaissement portemonnaie)
@@ -1230,6 +1303,7 @@ model Encaissement {
 
   journalCaisse JournalCaisse?
   sortiesPharmacie SortiePharmacie[]
+  bacFacture    BacFacture?
 
   @@index([patientId])
   @@index([sessionId])

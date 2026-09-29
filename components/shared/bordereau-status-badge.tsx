@@ -4,6 +4,7 @@ import type { BordereauStatut, FactureSuiviAssureurStatut } from "@/lib/types/bo
 
 const bordereauConfig: Record<BordereauStatut, { label: string; className: string }> = {
   BROUILLON: { label: "Brouillon", className: "bg-gray-100 text-gray-700" },
+  PARTIEL: { label: "Partiel", className: "bg-sky-100 text-sky-800" },
   DEPOSE: { label: "Déposé", className: "bg-amber-100 text-amber-800" },
   PAYE: { label: "Payé", className: "bg-emerald-100 text-emerald-800" },
 }

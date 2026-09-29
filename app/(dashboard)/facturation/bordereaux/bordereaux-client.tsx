@@ -52,10 +52,12 @@ export function BordereauxClient({
     () => ({
       total: bordereaux.length,
       brouillons: bordereaux.filter((b) => b.statut === "BROUILLON").length,
-      deposes: bordereaux.filter((b) => b.statut === "DEPOSE").length,
+      deposes: bordereaux.filter(
+        (b) => b.statut === "DEPOSE" || b.statut === "PARTIEL",
+      ).length,
       payes: bordereaux.filter((b) => b.statut === "PAYE").length,
       montantDepose: bordereaux
-        .filter((b) => b.statut === "DEPOSE")
+        .filter((b) => b.statut === "DEPOSE" || b.statut === "PARTIEL")
         .reduce((s, b) => s + b.montantTotal, 0),
     }),
     [bordereaux],
@@ -169,6 +171,7 @@ export function BordereauxClient({
               <SelectContent>
                 <SelectItem value="all">Tous statuts</SelectItem>
                 <SelectItem value="BROUILLON">Brouillon</SelectItem>
+                <SelectItem value="PARTIEL">Partiel</SelectItem>
                 <SelectItem value="DEPOSE">Déposé</SelectItem>
                 <SelectItem value="PAYE">Payé</SelectItem>
               </SelectContent>

@@ -18,6 +18,11 @@ function formatMouvement(montant: number, count: number): string {
   return `${formatCurrency(montant)} · ${formatOperationCount(count)}`
 }
 
+function formatHospitalisationCount(count: number): string {
+  if (count <= 0) return 'aucune'
+  return count === 1 ? '1' : String(count)
+}
+
 function formatEcartLine(ecart: number): string {
   const montant = formatCurrency(Math.abs(ecart))
   if (ecart === 0) {
@@ -120,6 +125,7 @@ export function caisseClotureRapportMessage(input: {
   nbVersements: number
   totalEncaissements: number
   nbEncaissements: number
+  nbHospitalisationsJour: number
   soldeTheorique: number
   soldeReel: number
   ecart: number
@@ -141,6 +147,7 @@ export function caisseClotureRapportMessage(input: {
     `➕ Recharges (espèces / MoMo) : ${formatMouvement(input.totalRecharges, input.nbRecharges)}`,
     `➖ Versements sortants : ${formatMouvement(input.totalVersements, input.nbVersements)}`,
     `✅ Encaissements patients : ${formatMouvement(input.totalEncaissements, input.nbEncaissements)}`,
+    `🏥 Hospitalisations du jour : ${formatHospitalisationCount(input.nbHospitalisationsJour)}`,
     '',
     SECTION_SEP,
     '*Bilan de clôture*',

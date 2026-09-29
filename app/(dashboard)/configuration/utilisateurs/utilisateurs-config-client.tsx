@@ -67,6 +67,7 @@ function roleStyle(role: Role | null): RoleStyle {
   switch (role) {
     case "Admin":      return { avatar: "bg-[#cd3b86]/15 text-[#cd3b86]", banner: "from-[#cd3b86] to-[#b8307a]", dot: "bg-[#cd3b86]", light: "bg-[#cd3b86]/8 text-[#cd3b86] border-[#cd3b86]/20" }
     case "Médecin":    return { avatar: "bg-blue-100 text-blue-700",       banner: "from-blue-500 to-blue-600",   dot: "bg-blue-500",   light: "bg-blue-50 text-blue-700 border-blue-200" }
+    case "Sage femme": return { avatar: "bg-rose-100 text-rose-700",       banner: "from-rose-500 to-rose-600",   dot: "bg-rose-500",   light: "bg-rose-50 text-rose-700 border-rose-200" }
     case "Manager":    return { avatar: "bg-violet-100 text-violet-700",   banner: "from-violet-500 to-violet-600", dot: "bg-violet-500", light: "bg-violet-50 text-violet-700 border-violet-200" }
     case "Front Office": return { avatar: "bg-amber-100 text-amber-700",  banner: "from-amber-400 to-amber-500", dot: "bg-amber-400",  light: "bg-amber-50 text-amber-700 border-amber-200" }
     case "Caisse":     return { avatar: "bg-emerald-100 text-emerald-700", banner: "from-emerald-500 to-emerald-600", dot: "bg-emerald-500", light: "bg-emerald-50 text-emerald-700 border-emerald-200" }
@@ -340,10 +341,16 @@ export function UtilisateursConfigClient({
     setActiveTab("users")
   }
 
-  // Stats per role / groupe personnalisé
+  /** Comptes actifs uniquement — les désactivés n'apparaissent plus dans la liste. */
+  const activeUsers = React.useMemo(
+    () => initialUsers.filter((u) => u.actif),
+    [initialUsers],
+  )
+
+  // Stats per role / groupe personnalisé (comptes actifs seulement)
   const roleCounts = React.useMemo(() => {
     const counts: Record<string, number> = {}
-    for (const u of initialUsers) {
+    for (const u of activeUsers) {
       const list = u.appRoles?.length
         ? u.appRoles
         : u.appRole
@@ -362,14 +369,14 @@ export function UtilisateursConfigClient({
       }
     }
     return counts
-  }, [initialUsers]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeUsers]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const activeCount = initialUsers.filter((u) => u.actif).length
+  const activeCount = activeUsers.length
   const inactiveCount = initialUsers.length - activeCount
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase()
-    return initialUsers.filter((u) => {
+    return activeUsers.filter((u) => {
       const matchSearch = !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.specialite ?? "").toLowerCase().includes(q)
       const userRoles = u.appRoles?.length
         ? u.appRoles
@@ -385,7 +392,7 @@ export function UtilisateursConfigClient({
             : userRoles.includes(filterRole as Role))
       return matchSearch && matchRole
     })
-  }, [initialUsers, search, filterRole]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeUsers, search, filterRole]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasFilters = search !== "" || filterRole !== "all"
 
@@ -537,7 +544,7 @@ export function UtilisateursConfigClient({
                 <Users className="h-4.5 w-4.5 text-[#cd3b86] h-[18px] w-[18px]" />
               </div>
               <div>
-                <p className="text-2xl font-extrabold text-gray-900 leading-none">{initialUsers.length}</p>
+                <p className="text-2xl font-extrabold text-gray-900 leading-none">{activeCount}</p>
                 <p className="text-[11px] text-gray-500 mt-0.5">Comptes</p>
               </div>
             </CardContent>
@@ -571,7 +578,7 @@ export function UtilisateursConfigClient({
 
           {/* Per-role pills */}
           <div className="flex flex-wrap items-center gap-2">
-            <RoleStatCard role="all" count={initialUsers.length}
+            <RoleStatCard role="all" count={activeCount}
               onClick={() => setFilterRole("all")} active={filterRole === "all"} />
             {roles.map((r) => (roleCounts[r] ?? 0) > 0 ? (
               <RoleStatCard key={r} role={r} count={roleCounts[r] ?? 0}
@@ -892,7 +899,7 @@ export function UtilisateursConfigClient({
           {/* ── Permissions tab ──────────────────────────────────────────── */}
           <TabsContent value="permissions" className="mt-0">
             <PermissionsPanel
-              users={initialUsers}
+              users={activeUsers}
               initialMatrix={initialPermissionMatrix}
               initialCustomGroups={initialCustomGroups}
               canEdit={canEditPermissions}

@@ -2,11 +2,15 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { isNonAssureAssuranceName } from '@/lib/assurance/non-assure'
 import { round2 } from '@/lib/caisse/helpers'
+import type {
+  BordereauStatut,
+  FactureSuiviAssureurStatut,
+  BordereauFactureStatut,
+} from '@/lib/types/bordereau'
 
 function padNum(n: number, len: number) {
   return String(n).padStart(len, '0')
 }
-import type { BordereauStatut, FactureSuiviAssureurStatut } from '@/lib/types/bordereau'
 
 type Db = Prisma.TransactionClient | typeof prisma
 
@@ -124,6 +128,34 @@ export function suiviAssureurFromBordereau(
   if (bordereauStatut === 'BROUILLON') return 'EN_BORDEREAU'
   if (bordereauStatut === 'DEPOSE') return 'DEPOSE'
   return 'PAYE'
+}
+
+/** Suivi assureur dérivé du statut de la ligne BordereauFacture. */
+export function suiviAssureurFromBordereauFacture(
+  lineStatut: BordereauFactureStatut | string | null | undefined,
+): FactureSuiviAssureurStatut {
+  if (!lineStatut) return 'A_DEPOSER'
+  if (lineStatut === 'EN_BORDEREAU') return 'EN_BORDEREAU'
+  if (lineStatut === 'DEPOSE') return 'DEPOSE'
+  if (lineStatut === 'PAYE') return 'PAYE'
+  return 'A_DEPOSER'
+}
+
+/**
+ * Agrège le statut global du bordereau à partir des lignes.
+ * — BROUILLON : aucune facture déposée
+ * — PARTIEL : certaines déposées/payées, d'autres encore en bordereau
+ * — DEPOSE : toutes déposées (aucune encore « en bordereau », pas toutes payées)
+ * — PAYE : toutes payées
+ */
+export function deriveBordereauStatutFromLines(
+  lineStatuts: Array<BordereauFactureStatut | string>,
+): BordereauStatut {
+  if (lineStatuts.length === 0) return 'BROUILLON'
+  if (lineStatuts.every((s) => s === 'PAYE')) return 'PAYE'
+  if (lineStatuts.every((s) => s === 'EN_BORDEREAU')) return 'BROUILLON'
+  if (lineStatuts.some((s) => s === 'EN_BORDEREAU')) return 'PARTIEL'
+  return 'DEPOSE'
 }
 
 export { round2 }

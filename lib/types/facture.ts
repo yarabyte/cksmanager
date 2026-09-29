@@ -23,6 +23,8 @@ export type FactureFeuilleResume = {
   feuilleId: string
   numero: string
   libelle: string | null
+  /** Source affichée sur l'impression */
+  kind?: 'feuille' | 'prescription'
   montantPatient: number
   montantAssurance: number
   lignes: FeuilleLigneRow[]
@@ -32,7 +34,7 @@ export type FactureFeuilleResume = {
 export type FacturePaiementHistoriqueRow = {
   id: string
   numero: string
-  type: 'FEUILLE' | 'FACTURE'
+  type: 'FEUILLE' | 'FACTURE' | 'PRESCRIPTION'
   montant: number
   createdAt: string
   caissierNom: string | null

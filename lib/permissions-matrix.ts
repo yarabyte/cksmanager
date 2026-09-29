@@ -5,6 +5,7 @@ export const ALL_ROLES: Role[] = [
   "Admin",
   "Manager",
   "Médecin",
+  "Sage femme",
   "Front Office",
   "Caisse",
   "Pharmacie",
@@ -21,7 +22,15 @@ export const ALL_MODULES: Module[] = [
   "pharmacie",
   "caisse",
   "configuration",
+  "rapports",
+  "assurances",
+  "medical",
+  "planning",
+  "hospitalisation",
 ]
+
+/** Modules en lecture seule : aucune action create/edit/delete n'a de sens pour eux. */
+export const VIEW_ONLY_MODULES: Module[] = ["dashboard", "rapports"]
 
 export const ALL_ACTIONS: Action[] = ["view", "create", "edit", "delete"]
 
@@ -44,6 +53,11 @@ const moduleSchema = z.enum([
   "pharmacie",
   "caisse",
   "configuration",
+  "rapports",
+  "assurances",
+  "medical",
+  "planning",
+  "hospitalisation",
 ])
 const roleSchema = z.enum([
   "Admin",
@@ -53,6 +67,7 @@ const roleSchema = z.enum([
   "Caisse",
   "Pharmacie",
   "Commis Pharmacie",
+  "Sage femme",
 ])
 
 const matrixSchema = z.record(
@@ -64,7 +79,7 @@ const customGroupSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   pages: z.array(z.string()),
-  permissions: z.record(moduleSchema, z.array(actionSchema)),
+  permissions: z.record(moduleSchema, z.array(actionSchema)).optional(),
 })
 
 const storedConfigSchema = z.object({
@@ -76,10 +91,10 @@ export function clonePermissionMatrix(matrix: PermissionMatrix): PermissionMatri
   return structuredClone(matrix)
 }
 
-/** Applique les règles de cohérence (dashboard=voir seul, voir auto-ajouté) à un jeu d'actions. */
+/** Applique les règles de cohérence (modules en lecture seule, voir auto-ajouté) à un jeu d'actions. */
 function normalizeModuleActions(module: Module, actions: Action[]): Action[] {
   const clean = [...new Set(actions)].filter((a) => ALL_ACTIONS.includes(a))
-  if (module === "dashboard") {
+  if (VIEW_ONLY_MODULES.includes(module)) {
     return clean.includes("view") ? ["view"] : []
   }
   const withoutView = clean.filter((a) => a !== "view")
@@ -120,17 +135,71 @@ export function normalizeCustomGroup(group: {
   }
 }
 
+const HOSPITALISATION_ROLES = new Set<Role>(["Admin", "Manager", "Sage femme"])
+
+const SAGE_FEMME_DEFAULT: Record<Module, Action[]> = {
+  dashboard: ["view"],
+  patients: ["view", "create", "edit"],
+  visites: ["view", "create", "edit"],
+  feuilleCirculation: ["view", "create", "edit"],
+  prescriptions: ["view", "create", "edit"],
+  facturation: ["view"],
+  pharmacie: ["view"],
+  caisse: [],
+  configuration: [],
+  rapports: [],
+  assurances: [],
+  medical: ["view", "create", "edit"],
+  planning: ["view", "create", "edit"],
+  hospitalisation: ["view", "create", "edit"],
+}
+
+/** Modules / rôles ajoutés après coup : si absents d'une config déjà sauvée, on reprend le défaut. */
+const ABSENT_MODULE_DEFAULTS: Partial<Record<Role, Partial<Record<Module, Action[]>>>> = {
+  Admin: { hospitalisation: ["view", "create", "edit", "delete"] },
+  Manager: { hospitalisation: ["view", "create", "edit"] },
+  "Sage femme": SAGE_FEMME_DEFAULT,
+}
+
+function mergeAbsentModules(matrix: PermissionMatrix): PermissionMatrix {
+  const out = {} as PermissionMatrix
+  for (const role of ALL_ROLES) {
+    const stored = matrix[role]
+    const row = {
+      ...(role === "Sage femme" && !stored ? SAGE_FEMME_DEFAULT : stored ?? {}),
+    } as Record<Module, Action[]>
+    const fallbacks = ABSENT_MODULE_DEFAULTS[role]
+    if (fallbacks) {
+      for (const [mod, actions] of Object.entries(fallbacks) as [Module, Action[]][]) {
+        if (!Object.prototype.hasOwnProperty.call(row, mod)) {
+          row[mod] = actions
+        }
+      }
+    }
+    if (!HOSPITALISATION_ROLES.has(role)) {
+      row.hospitalisation = []
+    }
+    out[role] = row
+  }
+  return out
+}
+
 /** Rétro-compatible : accepte l'ancien format (matrice brute) ou le nouveau ({matrix, customGroups}). */
 export function parseStoredPermissionsConfig(raw: unknown): StoredPermissionsConfig {
   if (raw && typeof raw === "object" && "matrix" in (raw as Record<string, unknown>)) {
     const parsed = storedConfigSchema.parse(raw)
     return {
-      matrix: normalizePermissionMatrix(parsed.matrix as PermissionMatrix),
+      matrix: normalizePermissionMatrix(
+        mergeAbsentModules(parsed.matrix as PermissionMatrix),
+      ),
       customGroups: (parsed.customGroups ?? []).map(normalizeCustomGroup),
     }
   }
   const matrix = matrixSchema.parse(raw) as PermissionMatrix
-  return { matrix: normalizePermissionMatrix(matrix), customGroups: [] }
+  return {
+    matrix: normalizePermissionMatrix(mergeAbsentModules(matrix)),
+    customGroups: [],
+  }
 }
 
 /** @deprecated Préférer parseStoredPermissionsConfig — conservé pour compat. */
@@ -158,7 +227,7 @@ export function toggleActionSet(
   enabled: boolean,
 ): Action[] {
   const set = new Set(current)
-  if (module === "dashboard") {
+  if (VIEW_ONLY_MODULES.includes(module)) {
     if (enabled) set.add("view")
     else set.clear()
     return normalizeModuleActions(module, [...set])
@@ -183,7 +252,7 @@ export function slugifyGroupId(label: string, existingIds: string[]): string {
   const base =
     label
       .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
+      .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase()
       .trim()
       .replace(/[^a-z0-9]+/g, "-")

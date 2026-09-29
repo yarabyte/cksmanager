@@ -16,6 +16,7 @@ import {
   Stethoscope,
   Calendar,
   Clock,
+  BedDouble,
   Lock,
   Printer,
   Receipt,
@@ -457,6 +458,24 @@ export function FeuilleDetailClient({
               </span>
             </span>
           </div>
+          {feuille.hospitalisation?.statut === "EN_COURS" && (
+            <div className="flex items-center gap-2 text-sm">
+              <BedDouble className="h-4 w-4 shrink-0 text-sky-500" />
+              <span className="flex flex-col leading-tight">
+                <span className="text-[11px] text-sky-600">Hospitalisation — entrée</span>
+                <Link
+                  href={`/hospitalisation/${feuille.hospitalisation.id}`}
+                  className="font-medium text-sky-800 hover:underline"
+                >
+                  {format(
+                    new Date(feuille.hospitalisation.dateEntree),
+                    "d MMMM yyyy",
+                    { locale: fr },
+                  )}
+                </Link>
+              </span>
+            </div>
+          )}
           {dateCreation && (
             <div className="flex items-center gap-2 text-sm">
               <Clock className="h-4 w-4 shrink-0 text-gray-400" />

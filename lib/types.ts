@@ -7,6 +7,7 @@ export type Role =
   | "Caisse" 
   | "Pharmacie"
   | "Commis Pharmacie"
+  | "Sage femme"
 
 export interface User {
   id: string
@@ -131,6 +132,11 @@ export type Module =
   | "pharmacie"
   | "caisse"
   | "configuration"
+  | "rapports"
+  | "assurances"
+  | "medical"
+  | "planning"
+  | "hospitalisation"
 
 export type Action = "view" | "create" | "edit" | "delete"
 
@@ -146,7 +152,7 @@ export interface NavItem {
   icon: string
   badge?: number
   children?: NavItem[]
-  /** Module de droits qui conditionne l'affichage de l'item (absent = toujours visible). */
+  /** Module de droits (sinon déduit de l'href). */
   module?: Module
 }
 

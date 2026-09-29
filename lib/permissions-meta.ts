@@ -13,6 +13,11 @@ import {
   Plus,
   Pencil,
   Trash2,
+  BarChart3,
+  Shield,
+  HeartPulse,
+  Calendar,
+  BedDouble,
 } from "lucide-react"
 import type { Action, Module } from "@/lib/types"
 
@@ -73,6 +78,36 @@ export const MODULE_META: Record<
     description: "Référentiels et paramètres système",
     icon: Settings,
     color: "#8b5cf6",
+  },
+  rapports: {
+    label: "Rapports",
+    description: "Rapports de chiffre d'affaires et statistiques",
+    icon: BarChart3,
+    color: "#0ea5e9",
+  },
+  assurances: {
+    label: "Assurances",
+    description: "Suivi des assureurs et bordereaux d'encaissement",
+    icon: Shield,
+    color: "#14b8a6",
+  },
+  medical: {
+    label: "Dossier médical",
+    description: "Gynécologie, antécédents, paramètres et salle d'attente",
+    icon: HeartPulse,
+    color: "#e11d48",
+  },
+  planning: {
+    label: "Planning",
+    description: "Planning médecin et rendez-vous patients",
+    icon: Calendar,
+    color: "#7c3aed",
+  },
+  hospitalisation: {
+    label: "Hospitalisation",
+    description: "Admissions, séjour et sortie des patients hospitalisés",
+    icon: BedDouble,
+    color: "#0f766e",
   },
 }
 

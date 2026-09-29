@@ -20,15 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
   DialogContent,
@@ -265,23 +257,26 @@ export function CaissePageClient({
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
-          <CardHeader className="pb-3">
+      <div className="grid gap-6 lg:grid-cols-5 lg:h-[32rem]">
+        <Card className="flex h-full min-h-0 flex-col gap-4 overflow-hidden py-5 lg:col-span-3">
+          <CardHeader className="shrink-0 space-y-4 px-5 pb-0">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-base">À encaisser</CardTitle>
-              <div className="relative w-full sm:max-w-xs">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <div>
+                <CardTitle className="text-base">À encaisser</CardTitle>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Sélectionnez un élément pour procéder à l&apos;encaissement
+                </p>
+              </div>
+              <div className="relative w-full sm:max-w-[17rem]">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Patient, n° feuille, prescription ou facture…"
-                  className="pl-8"
+                  placeholder="Patient, n°…"
+                  className="h-9 pl-8"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
             <Tabs
               value={tab}
               onValueChange={(v) => {
@@ -290,143 +285,204 @@ export function CaissePageClient({
                 setContext(null)
               }}
             >
-              <TabsList className="mb-4">
-                <TabsTrigger value="FEUILLE">
-                  Feuilles de circulation ({feuilles.length})
-                </TabsTrigger>
-                <TabsTrigger value="PRESCRIPTION">
-                  Prescriptions ({prescriptions.length})
-                </TabsTrigger>
-                <TabsTrigger value="FACTURE">Factures ({factures.length})</TabsTrigger>
+              <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-muted/70 p-1">
+                {(
+                  [
+                    { value: "FEUILLE" as const, label: "Feuilles", count: feuilles.length },
+                    {
+                      value: "PRESCRIPTION" as const,
+                      label: "Prescriptions",
+                      count: prescriptions.length,
+                    },
+                    { value: "FACTURE" as const, label: "Factures", count: factures.length },
+                  ] as const
+                ).map((t) => (
+                  <TabsTrigger
+                    key={t.value}
+                    value={t.value}
+                    className="h-9 gap-1.5 rounded-lg px-2 text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  >
+                    <span className="truncate">{t.label}</span>
+                    <span
+                      className={
+                        tab === t.value
+                          ? "inline-flex min-w-5 items-center justify-center rounded-md bg-[#cd3b86]/10 px-1.5 text-[11px] font-semibold text-[#cd3b86]"
+                          : "inline-flex min-w-5 items-center justify-center rounded-md bg-background/80 px-1.5 text-[11px] font-semibold text-muted-foreground"
+                      }
+                    >
+                      {t.count}
+                    </span>
+                  </TabsTrigger>
+                ))}
               </TabsList>
-
-              <TabsContent value={tab} className="mt-0">
-                {list.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">
-                    Aucun élément à encaisser.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>N°</TableHead>
-                          <TableHead>Patient</TableHead>
-                          <TableHead>Visite</TableHead>
-                          <TableHead className="text-right">Part patient</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {list.map((item) => (
-                          <TableRow
-                            key={`${item.type}-${item.id}`}
-                            className={
-                              selected?.id === item.id && selected.type === item.type
-                                ? "bg-primary/5 cursor-pointer"
-                                : "cursor-pointer"
-                            }
-                            onClick={() => void loadContext(item)}
-                          >
-                            <TableCell className="font-sans text-xs">{item.numero}</TableCell>
-                            <TableCell>
-                              <div className="text-sm font-medium">{item.patientLabel}</div>
-                              {item.patientDob && (
-                                <div className="text-xs text-muted-foreground">
-                                  {formatBirthAge(item.patientDob)}
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {item.dateVisite ? formatDate(item.dateVisite) : "—"}
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {formatCurrency(item.montantPatient)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </TabsContent>
             </Tabs>
+          </CardHeader>
+          <CardContent className="flex min-h-0 flex-1 flex-col px-5 pt-0">
+            {list.length === 0 ? (
+              <div className="flex h-full min-h-[12rem] flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-muted/20 px-4 text-center">
+                <Receipt className="h-8 w-8 text-muted-foreground/50" />
+                <p className="text-sm font-medium text-muted-foreground">
+                  Aucun élément à encaisser
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Les {tab === "FEUILLE" ? "feuilles" : tab === "FACTURE" ? "factures" : "prescriptions"}{" "}
+                  en attente apparaîtront ici.
+                </p>
+              </div>
+            ) : (
+              <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
+                {list.map((item) => {
+                  const isSelected =
+                    selected?.id === item.id && selected.type === item.type
+                  return (
+                    <li key={`${item.type}-${item.id}`}>
+                      <button
+                        type="button"
+                        onClick={() => void loadContext(item)}
+                        className={
+                          isSelected
+                            ? "flex w-full items-start gap-3 rounded-xl border border-[#cd3b86]/30 bg-[#cd3b86]/[0.06] px-3.5 py-3 text-left shadow-sm transition-colors"
+                            : "flex w-full items-start gap-3 rounded-xl border border-transparent bg-muted/30 px-3.5 py-3 text-left transition-colors hover:border-border hover:bg-muted/50"
+                        }
+                      >
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-tight text-foreground ring-1 ring-border">
+                              {item.numero}
+                            </span>
+                            {item.dateVisite && (
+                              <span className="text-[11px] text-muted-foreground">
+                                Visite {formatDate(item.dateVisite)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="truncate text-sm font-semibold text-gray-900">
+                            {item.patientLabel}
+                          </p>
+                          {item.patientDob && (
+                            <p className="text-xs text-muted-foreground">
+                              {formatBirthAge(item.patientDob)}
+                            </p>
+                          )}
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Part patient
+                          </p>
+                          <p className="mt-0.5 text-sm font-bold tabular-nums text-gray-900">
+                            {formatCurrency(item.montantPatient)}
+                          </p>
+                        </div>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
+        <Card className="flex h-full min-h-0 flex-col gap-4 overflow-hidden py-5 lg:col-span-2">
+          <CardHeader className="shrink-0 px-5 pb-0">
             <CardTitle className="text-base">Encaissement</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5">
             {!selected ? (
-              <p className="text-sm text-muted-foreground">
-                Sélectionnez une feuille, une prescription ou une facture dans la liste.
-              </p>
+              <div className="flex h-full min-h-[12rem] flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-muted/20 px-4 text-center">
+                <Banknote className="h-8 w-8 text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground">
+                  Sélectionnez une feuille, une prescription ou une facture dans la liste.
+                </p>
+              </div>
             ) : loadingCtx ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Chargement…
               </div>
             ) : context ? (
-              <div className="space-y-4">
-                <div className="rounded-xl border bg-muted/30 p-4 space-y-2 text-sm">
-                  <p className="font-medium">{selected.patientLabel}</p>
-                  <p className="text-muted-foreground font-sans">{selected.numero}</p>
-                  {selected.sourceLabel && (
-                    <p className="text-xs text-muted-foreground">{selected.sourceLabel}</p>
-                  )}
-                  <div className="flex justify-between pt-2 border-t">
-                    <span>Part patient</span>
-                    <span className="font-bold">{formatCurrency(context.montantDu)}</span>
+              <div className="flex min-h-0 flex-1 flex-col gap-4">
+                <div className="shrink-0 space-y-3 rounded-xl border bg-gradient-to-b from-muted/40 to-muted/10 p-4 text-sm">
+                  <div>
+                    <p className="font-semibold text-gray-900">{selected.patientLabel}</p>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">{selected.numero}</p>
+                    {selected.sourceLabel && (
+                      <p className="mt-1 text-xs text-muted-foreground">{selected.sourceLabel}</p>
+                    )}
                   </div>
-                  <div className="flex justify-between">
-                    <span>Solde portemonnaie</span>
-                    <span
-                      className={
-                        context.peutEncaisser ? "text-emerald-600 font-medium" : "text-amber-700"
-                      }
-                    >
-                      {formatCurrency(context.walletSolde)}
-                    </span>
-                  </div>
-                  {context.manque > 0 && (
-                    <div className="flex justify-between text-amber-700">
-                      <span>Manque</span>
-                      <span className="font-medium">{formatCurrency(context.manque)}</span>
+                  <div className="space-y-2 border-t pt-3">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Part patient</span>
+                      <span className="font-bold tabular-nums">
+                        {formatCurrency(context.montantDu)}
+                      </span>
                     </div>
-                  )}
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">Solde portemonnaie</span>
+                      <span
+                        className={
+                          context.peutEncaisser
+                            ? "font-medium tabular-nums text-emerald-600"
+                            : "font-medium tabular-nums text-amber-700"
+                        }
+                      >
+                        {formatCurrency(context.walletSolde)}
+                      </span>
+                    </div>
+                    {context.manque > 0 && (
+                      <div className="flex justify-between gap-3 rounded-lg bg-amber-50 px-2.5 py-1.5 text-amber-800">
+                        <span>Manque</span>
+                        <span className="font-semibold tabular-nums">
+                          {formatCurrency(context.manque)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {context.lignes && context.lignes.length > 0 && (
-                  <div className="max-h-40 overflow-y-auto text-xs text-muted-foreground space-y-1">
-                    {context.lignes.map((l) => (
-                      <div key={l.id} className="flex justify-between gap-2">
-                        <span className="truncate">
-                          {l.typeLigne === "PHARMA" ? l.produitNom : l.acteNom} ×{l.quantite}
-                        </span>
-                        <span className="shrink-0">{formatCurrency(l.montantPatient)}</span>
+                {(context.lignes?.length || context.feuillesGroupes?.length) ? (
+                  <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain">
+                    {context.lignes && context.lignes.length > 0 && (
+                      <div className="space-y-1.5 rounded-lg border bg-muted/20 p-2.5 text-xs text-muted-foreground">
+                        {context.lignes.map((l) => (
+                          <div key={l.id} className="flex justify-between gap-2">
+                            <span className="min-w-0 truncate">
+                              {l.typeLigne === "PHARMA" ? l.produitNom : l.acteNom} ×{l.quantite}
+                            </span>
+                            <span className="shrink-0 tabular-nums">
+                              {formatCurrency(l.montantPatient)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {context.feuillesGroupes?.map((f) => (
+                      <div
+                        key={f.feuilleId}
+                        className="space-y-1.5 rounded-lg border bg-muted/20 p-2.5 text-xs"
+                      >
+                        <p className="font-medium text-gray-700">
+                          Feuille de circulation {f.numero}
+                        </p>
+                        {f.lignes.map((l) => (
+                          <div
+                            key={l.id}
+                            className="flex justify-between gap-2 text-muted-foreground"
+                          >
+                            <span className="min-w-0 truncate">
+                              {l.typeLigne === "PHARMA" ? l.produitNom : l.acteNom} ×{l.quantite}
+                            </span>
+                            <span className="shrink-0 tabular-nums">
+                              {formatCurrency(l.montantPatient)}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     ))}
                   </div>
-                )}
+                ) : null}
 
-                {context.feuillesGroupes?.map((f) => (
-                  <div key={f.feuilleId} className="text-xs">
-                    <p className="font-medium text-gray-700 mb-1">
-                      Feuille de circulation {f.numero}
-                    </p>
-                    {f.lignes.map((l) => (
-                      <div key={l.id} className="flex justify-between gap-2 text-muted-foreground">
-                        <span className="truncate">
-                          {l.typeLigne === "PHARMA" ? l.produitNom : l.acteNom} ×{l.quantite}
-                        </span>
-                        <span>{formatCurrency(l.montantPatient)}</span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-
-                <div className="flex flex-col gap-2">
+                <div className="mt-auto flex shrink-0 flex-col gap-2 pt-1">
                   {!context.peutEncaisser && context.montantDu > 0 && (
                     <Button variant="outline" className="gap-2" onClick={openRecharge}>
                       <Wallet className="h-4 w-4" />
@@ -434,7 +490,7 @@ export function CaissePageClient({
                     </Button>
                   )}
                   <Button
-                    className="gap-2 bg-[#cd3b86] hover:bg-[#b8307a] text-white"
+                    className="h-11 gap-2 bg-[#cd3b86] text-white hover:bg-[#b8307a]"
                     disabled={!context.peutEncaisser || pending}
                     onClick={() => void handleEncaisser()}
                   >
@@ -452,7 +508,11 @@ export function CaissePageClient({
         </Card>
       </div>
 
-      <CaisseJournalCard journal={journal} />
+      <CaisseJournalCard
+        journal={journal}
+        title="Journal de caisse — journée"
+        emptyMessage="Aucun mouvement enregistré aujourd'hui."
+      />
 
       <Dialog open={showVersement} onOpenChange={setShowVersement}>
         <DialogContent>

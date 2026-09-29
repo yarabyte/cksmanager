@@ -90,6 +90,8 @@ export type JournalCaisseRow = {
   patientLabel: string | null
   referenceType: string | null
   referenceId: string | null
+  encaissementId: string | null
+  versementId: string | null
   createdAt: string
   userName: string | null
 }

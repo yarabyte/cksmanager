@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { hash } from "bcrypt"
 import { requireUserId } from "@/lib/auth/session"
+import { requirePermission } from "@/lib/permissions-guard"
 import {
   isCaisseLegacyRole,
   isMedecinTitre,
@@ -121,6 +123,7 @@ export async function updateUser(
   id: string,
   data: unknown,
 ): Promise<UserConfigRow> {
+  await requirePermission("configuration", "edit")
   const parsed = userUpdateSchema.parse(data)
   const roleValue = parsed.customGroupId
     ? parsed.customGroupId
@@ -154,6 +157,9 @@ export async function updateUser(
     pharmacieId = ph.id
   }
 
+  const password = parsed.password?.trim()
+  const passwordHash = password ? await hash(password, 10) : null
+
   const updated = await prisma.user.update({
     where: { id: BigInt(id) },
     data: {
@@ -168,6 +174,7 @@ export async function updateUser(
       actif: parsed.actif,
       caissePosteId: caisseRole ? caissePosteId : null,
       pharmacieId: pharmacieRole ? pharmacieId : null,
+      ...(passwordHash ? { password: passwordHash } : {}),
     },
     include: userInclude,
   })

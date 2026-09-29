@@ -1,36 +1,32 @@
 import { PrismaClient } from '@prisma/client'
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined }
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
+}
+
+function datasourceUrl(): string | undefined {
+  const url = process.env.DATABASE_URL
+  if (!url) return undefined
+  if (/[?&]connection_limit=/.test(url)) return url
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}connection_limit=5`
+}
+
+function createPrismaClient() {
+  const url = datasourceUrl()
+  return new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+    ...(url ? { datasources: { db: { url } } } : {}),
+  })
+}
 
 /**
- * Après `prisma generate` (nouveaux modèles), l’instance Prisma mise en cache par Next en dev
- * peut rester l’ancienne classe sans les nouveaux delegates → `.count` sur `undefined`.
+ * Un seul client par process. Ne pas recréer / `$disconnect` au HMR :
+ * Turbopack garderait d’anciennes instances (trop de connexions PG)
+ * ou un moteur déjà coupé (« Engine is not yet connected »).
  */
-function isStalePrismaClient(c: PrismaClient | undefined): boolean {
-  if (c == null) return false
-  const x = c as unknown as {
-    conditionnement?: unknown
-    kitActe?: unknown
-    feuilleCirculation?: unknown
-    wallet?: unknown
-  }
-  return (
-    x.conditionnement === undefined ||
-    x.kitActe === undefined ||
-    x.feuilleCirculation === undefined ||
-    x.wallet === undefined
-  )
+export const prisma = globalForPrisma.prisma ?? createPrismaClient()
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma
 }
-
-if (process.env.NODE_ENV !== 'production' && isStalePrismaClient(globalForPrisma.prisma)) {
-  void globalForPrisma.prisma!.$disconnect().catch(() => {})
-  globalForPrisma.prisma = undefined
-}
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
-  })
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma

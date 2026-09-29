@@ -2,6 +2,7 @@ import type { CustomGroup, PageCatalogItem, Role, NavGroup, NavItem } from "./ty
 import { hasPermissionWithMatrixAny } from "./permissions"
 import { ALL_ROLES } from "./permissions-matrix"
 import type { PermissionMatrix } from "./permissions-matrix"
+import { moduleForPathname } from "./permissions-access"
 
 const caisseNavItem: NavItem = {
   label: "Gestion de la caisse",
@@ -137,7 +138,19 @@ export function getNavigationForRole(role: Role): NavGroup[] {
               href: "/prescriptions",
               icon: "ClipboardList",
             },
-            { label: "Facturation", href: "/facturation", icon: "Receipt" },
+            {
+              label: "Hospitalisation",
+              href: "/hospitalisation",
+              icon: "BedDouble",
+              module: "hospitalisation",
+            },
+            { label: "Facturation", href: "/facturation", icon: "Receipt", children: [
+              { label: "Factures", href: "/facturation", icon: "Receipt" },
+              { label: "Bac à facture", href: "/facturation/bac", icon: "Inbox" },
+              { label: "Bordereaux", href: "/facturation/bordereaux", icon: "FileText" },
+              { label: "Recouvrement", href: "/facturation/recouvrement", icon: "CreditCard" },
+              { label: "Payé", href: "/facturation/paye", icon: "ClipboardCheck" },
+            ] },
             {
               label: "Pharmacie",
               href: "/pharmacie/stock",
@@ -185,7 +198,19 @@ export function getNavigationForRole(role: Role): NavGroup[] {
               href: "/prescriptions",
               icon: "ClipboardList",
             },
-            { label: "Facturation", href: "/facturation", icon: "Receipt" },
+            {
+              label: "Hospitalisation",
+              href: "/hospitalisation",
+              icon: "BedDouble",
+              module: "hospitalisation",
+            },
+            { label: "Facturation", href: "/facturation", icon: "Receipt", children: [
+              { label: "Factures", href: "/facturation", icon: "Receipt" },
+              { label: "Bac à facture", href: "/facturation/bac", icon: "Inbox" },
+              { label: "Bordereaux", href: "/facturation/bordereaux", icon: "FileText" },
+              { label: "Recouvrement", href: "/facturation/recouvrement", icon: "CreditCard" },
+              { label: "Payé", href: "/facturation/paye", icon: "ClipboardCheck" },
+            ] },
             {
               label: "Pharmacie",
               href: "/pharmacie/stock",
@@ -220,6 +245,35 @@ export function getNavigationForRole(role: Role): NavGroup[] {
         },
       ]
 
+    case "Sage femme":
+      return [
+        ...baseNav,
+        {
+          label: "Suivi",
+          items: [
+            { label: "Patients", href: "/patients", icon: "Users" },
+            { label: "Visites", href: "/visites", icon: "Stethoscope" },
+            {
+              label: "Hospitalisation",
+              href: "/hospitalisation",
+              icon: "BedDouble",
+              module: "hospitalisation",
+            },
+            {
+              label: "Feuille de circulation",
+              href: "/feuilles-circulation",
+              icon: "ScrollText",
+              module: "feuilleCirculation",
+            },
+            { label: "Prescriptions", href: "/prescriptions", icon: "ClipboardList" },
+          ],
+        },
+        {
+          label: "Médical",
+          items: medicalNavItems,
+        },
+      ]
+
     case "Front Office":
       return [
         ...baseNav,
@@ -246,7 +300,12 @@ export function getNavigationForRole(role: Role): NavGroup[] {
           label: "Encaissements",
           items: [
             caisseNavItem,
-            { label: "Factures", href: "/facturation", icon: "Receipt" },
+            { label: "Factures", href: "/facturation", icon: "Receipt", children: [
+              { label: "Factures", href: "/facturation", icon: "Receipt" },
+              { label: "Bac à facture", href: "/facturation/bac", icon: "Inbox" },
+              { label: "Recouvrement", href: "/facturation/recouvrement", icon: "CreditCard" },
+              { label: "Payé", href: "/facturation/paye", icon: "ClipboardCheck" },
+            ] },
             { label: "Assurances", href: "/assurances", icon: "Shield" },
           ],
         },
@@ -292,8 +351,11 @@ export function filterNavGroupsByPermissions(
   matrix: PermissionMatrix,
   roles: Role[],
 ): NavGroup[] {
-  const isAllowed = (item: NavItem) =>
-    !item.module || hasPermissionWithMatrixAny(matrix, roles, item.module, "view")
+  const isAllowed = (item: NavItem) => {
+    const module = item.module ?? moduleForPathname(item.href)
+    if (!module) return true
+    return hasPermissionWithMatrixAny(matrix, roles, module, "view")
+  }
 
   return groups
     .map((group) => ({
@@ -375,7 +437,10 @@ export const breadcrumbLabels: Record<string, string> = {
   visites: "Visites",
   "feuilles-circulation": "Feuille de circulation",
   facturation: "Facturation",
+  bac: "Bac à facture",
   bordereaux: "Bordereaux assureurs",
+  recouvrement: "Recouvrement",
+  paye: "Payé",
   pharmacie: "Pharmacie",
   stock: "Stock",
   approvisionnements: "Approvisionnements",
@@ -401,6 +466,7 @@ export const breadcrumbLabels: Record<string, string> = {
   kits: "Kits",
   rapports: "Rapports",
   prescriptions: "Prescriptions",
+  hospitalisation: "Hospitalisation",
   planning: "Planning",
   "rendez-vous": "Rendez-vous",
   encaissements: "Encaissements",

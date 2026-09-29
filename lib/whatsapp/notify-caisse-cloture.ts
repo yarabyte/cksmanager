@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { round2, num } from '@/lib/caisse/helpers'
 import { getSessionStats } from '@/lib/caisse/session'
 import { formatDate, formatTime } from '@/lib/formatting'
+import { getZonedParts } from '@/lib/timezone'
 import { isValidWhatsAppPhone } from '@/lib/phone'
 import {
   getWasenderApiKey,
@@ -89,6 +90,12 @@ export async function notifyCaisseClotureRapport(sessionId: string): Promise<voi
   }
 
   const stats = await getSessionStats(session.id)
+  const closedAt = session.closedAt ?? new Date()
+  const day = getZonedParts(closedAt)
+  const dateEntreeJour = new Date(Date.UTC(day.year, day.month - 1, day.day))
+  const nbHospitalisationsJour = await prisma.hospitalisation.count({
+    where: { dateEntree: dateEntreeJour },
+  })
   const clinique = (await resolveCliniqueName()) || parametres?.nomClinique || 'la clinique'
 
   const formatSessionMoment = (d: Date | null) =>
@@ -107,6 +114,7 @@ export async function notifyCaisseClotureRapport(sessionId: string): Promise<voi
     nbVersements: stats.nbVersements,
     totalEncaissements: stats.totalEncaissements,
     nbEncaissements: stats.nbEncaissements,
+    nbHospitalisationsJour,
     soldeTheorique: round2(num(session.soldeTheoriqueCloture)),
     soldeReel: round2(num(session.soldeReelCloture)),
     ecart: round2(num(session.ecart)),

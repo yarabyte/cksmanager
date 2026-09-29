@@ -435,7 +435,22 @@ export async function getFeuilleById(id: string): Promise<FeuilleDetail | null> 
   const f = await prisma.feuilleCirculation.findUnique({
     where: { id: BigInt(id) },
     include: {
-      visite: { select: { id: true, patientId: true, dateVisite: true, medecin: { select: { name: true, titre: true, numeroOrdre: true } } } },
+      visite: {
+        select: {
+          id: true,
+          patientId: true,
+          dateVisite: true,
+          medecin: { select: { name: true, titre: true, numeroOrdre: true } },
+          hospitalisation: {
+            select: {
+              id: true,
+              dateEntree: true,
+              dateSortie: true,
+              statut: true,
+            },
+          },
+        },
+      },
       lignes: {
         orderBy: [{ position: 'asc' }, { id: 'asc' }],
         include: {
@@ -473,6 +488,8 @@ export async function getFeuilleById(id: string): Promise<FeuilleDetail | null> 
         }
       : null
 
+  const hosp = f.visite.hospitalisation
+
   return {
     id: f.id.toString(),
     numero: f.numero,
@@ -492,6 +509,14 @@ export async function getFeuilleById(id: string): Promise<FeuilleDetail | null> 
       medecinNom,
       medecinNumeroOrdre: medecin?.numeroOrdre ?? null,
     },
+    hospitalisation: hosp
+      ? {
+          id: hosp.id.toString(),
+          dateEntree: hosp.dateEntree.toISOString(),
+          dateSortie: hosp.dateSortie ? hosp.dateSortie.toISOString() : null,
+          statut: hosp.statut as 'EN_COURS' | 'SORTI',
+        }
+      : null,
     lignes,
     totaux: computeTotaux(lignes),
     avoir,
@@ -563,11 +588,13 @@ export async function getVisiteFeuilleContext(
 
 export async function listCategoriesForFeuille(): Promise<CategorieOption[]> {
   const rows = await prisma.categorieActe.findMany({ orderBy: { nom: 'asc' } })
-  return rows.map((c) => ({
-    id: c.id.toString(),
-    nom: c.nom,
-    isPharmacie: isPharmacieCategory(c.nom),
-  }))
+  return rows
+    .filter((c) => !isPharmacieCategory(c.nom))
+    .map((c) => ({
+      id: c.id.toString(),
+      nom: c.nom,
+      isPharmacie: false,
+    }))
 }
 
 export async function listActesForFeuille(): Promise<ActeOption[]> {
@@ -703,11 +730,8 @@ async function buildLignesData(
   const acteIds = [
     ...new Set(lignes.filter((l) => l.acteId).map((l) => BigInt(l.acteId as string))),
   ]
-  const produitIds = [
-    ...new Set(lignes.filter((l) => l.produitId).map((l) => BigInt(l.produitId as string))),
-  ]
 
-  const [categories, actes, produits] = await Promise.all([
+  const [categories, actes] = await Promise.all([
     prisma.categorieActe.findMany({ where: { id: { in: categorieIds } } }),
     acteIds.length
       ? prisma.acte.findMany({
@@ -715,14 +739,10 @@ async function buildLignesData(
           include: { assureur: { include: { assuranceValeurs: true } } },
         })
       : Promise.resolve([]),
-    produitIds.length
-      ? prisma.produit.findMany({ where: { id: { in: produitIds } } })
-      : Promise.resolve([]),
   ])
 
   const categorieMap = new Map(categories.map((c) => [c.id.toString(), c]))
   const acteMap = new Map(actes.map((a) => [a.id.toString(), a]))
-  const produitMap = new Map(produits.map((p) => [p.id.toString(), p]))
 
   const out: LigneCreateData[] = []
 
@@ -733,104 +753,64 @@ async function buildLignesData(
       throw new Error(`Ligne #${numLigne} : catégorie introuvable.`)
     }
     const categorieId = categorie.id
-    const isPharma = isPharmacieCategory(categorie.nom)
+    if (isPharmacieCategory(categorie.nom)) {
+      throw new Error(
+        `Ligne #${numLigne} : la catégorie Pharmacie n'est pas autorisée sur une feuille de circulation.`,
+      )
+    }
     const taux =
       affiliation.couvertures.get(categorieId.toString()) ??
       affiliation.tauxCouverture ??
       0
 
-    if (isPharma) {
-      if (!ligne.produitId) {
-        throw new Error(`Ligne #${numLigne} : sélectionnez un produit (catégorie Pharmacie).`)
-      }
-      const produit = produitMap.get(ligne.produitId)
-      if (!produit) {
-        throw new Error(`Ligne #${numLigne} : produit introuvable.`)
-      }
-      const puSaisi = normalizeDecimal(ligne.prixUnitaire)
-      const pu = puSaisi ?? Number(produit.prixVenteRef)
-      const remise = normalizeDecimal(ligne.remiseUnitaire) ?? 0
-      const produitHnc = produit.hnc != null ? Number(produit.hnc) : null
-      const hncSaisi = resolveHncSaisi(ligne.hnc, produitHnc)
-
-      const r = computeLigne({
-        typeLigne: 'PHARMA',
-        quantite: ligne.quantite,
-        taux,
-        hncSaisi,
-        pu,
-        remise,
-        produitHnc,
-      })
-
-      out.push({
-        typeLigne: 'PHARMA',
-        categorieId,
-        acteId: null,
-        produitId: produit.id,
-        quantite: Math.max(1, Math.trunc(ligne.quantite || 1)),
-        taux,
-        valeur: r.valeur,
-        hnc: r.hnc,
-        puSnapshot: r.puSnapshot,
-        remiseUnitaire: r.remiseUnitaire,
-        montantTotal: r.montantTotal,
-        montantAssurance: r.montantAssurance,
-        montantPatient: r.montantPatient,
-        imputeAssurance: null,
-        position: ligne.position ?? idx,
-        userId,
-      })
-    } else {
-      if (!ligne.acteId) {
-        throw new Error(`Ligne #${numLigne} : sélectionnez un acte.`)
-      }
-      const acte = acteMap.get(ligne.acteId)
-      if (!acte) {
-        throw new Error(`Ligne #${numLigne} : acte introuvable.`)
-      }
-      const acteTarifs = acte.assureur
-        ? buildTarifValeursMap(acte.assureur.assuranceValeurs)
-        : null
-      const valeurPoint = resolveValeurUnitairePoint(
-        acte.codeBase,
-        affiliation.valeurs,
-        acteTarifs,
-      )
-      const acteHnc = acte.prixHnc != null ? Number(acte.prixHnc) : null
-      const hncSaisi = resolveHncSaisi(ligne.hnc, acteHnc)
-
-      const r = computeLigne({
-        typeLigne: 'ACTE',
-        quantite: ligne.quantite,
-        taux,
-        hncSaisi,
-        valeurFixe: acte.valeurFixe ?? null,
-        coefficient: Number(acte.coefficient),
-        valeurUnitairePoint: valeurPoint,
-        acteHnc,
-        imputeAssurance: acte.imputeAssurance ?? null,
-      })
-
-      out.push({
-        typeLigne: 'ACTE',
-        categorieId,
-        acteId: acte.id,
-        produitId: null,
-        quantite: Math.max(1, Math.trunc(ligne.quantite || 1)),
-        taux,
-        valeur: r.valeur,
-        hnc: r.hnc,
-        puSnapshot: null,
-        remiseUnitaire: null,
-        montantTotal: r.montantTotal,
-        montantAssurance: r.montantAssurance,
-        montantPatient: r.montantPatient,
-        imputeAssurance: r.imputeAssurance,
-        position: ligne.position ?? idx,
-        userId,
-      })
+    if (!ligne.acteId) {
+      throw new Error(`Ligne #${numLigne} : sélectionnez un acte.`)
     }
+    const acte = acteMap.get(ligne.acteId)
+    if (!acte) {
+      throw new Error(`Ligne #${numLigne} : acte introuvable.`)
+    }
+    const acteTarifs = acte.assureur
+      ? buildTarifValeursMap(acte.assureur.assuranceValeurs)
+      : null
+    const valeurPoint = resolveValeurUnitairePoint(
+      acte.codeBase,
+      affiliation.valeurs,
+      acteTarifs,
+    )
+    const acteHnc = acte.prixHnc != null ? Number(acte.prixHnc) : null
+    const hncSaisi = resolveHncSaisi(ligne.hnc, acteHnc)
+
+    const r = computeLigne({
+      typeLigne: 'ACTE',
+      quantite: ligne.quantite,
+      taux,
+      hncSaisi,
+      valeurFixe: acte.valeurFixe ?? null,
+      coefficient: Number(acte.coefficient),
+      valeurUnitairePoint: valeurPoint,
+      acteHnc,
+      imputeAssurance: acte.imputeAssurance ?? null,
+    })
+
+    out.push({
+      typeLigne: 'ACTE',
+      categorieId,
+      acteId: acte.id,
+      produitId: null,
+      quantite: Math.max(1, Math.trunc(ligne.quantite || 1)),
+      taux,
+      valeur: r.valeur,
+      hnc: r.hnc,
+      puSnapshot: null,
+      remiseUnitaire: null,
+      montantTotal: r.montantTotal,
+      montantAssurance: r.montantAssurance,
+      montantPatient: r.montantPatient,
+      imputeAssurance: r.imputeAssurance,
+      position: ligne.position ?? idx,
+      userId,
+    })
   })
 
   return out

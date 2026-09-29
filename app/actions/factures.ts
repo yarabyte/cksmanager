@@ -8,6 +8,7 @@ import { requireUserId } from '@/lib/auth/session'
 import {
   getFeuillesInConfirmedFactureIds,
   loadFeuilleLignes,
+  loadPrescriptionLignes,
   nextFactureNumero,
   resolvePatientLabels,
   round2,
@@ -17,7 +18,7 @@ import { isNonAssureAssuranceName } from '@/lib/assurance/non-assure'
 import { loadFactureHistoriquePaiements } from '@/lib/facture/payment-history'
 import {
   resolveActiveAssuranceId,
-  suiviAssureurFromBordereau,
+  suiviAssureurFromBordereauFacture,
 } from '@/lib/bordereau/helpers'
 import type {
   FactureDetail,
@@ -27,7 +28,7 @@ import type {
   FeuilleEligibleFacture,
   VisiteFeuillesEligibles,
 } from '@/lib/types/facture'
-import type { BordereauStatut, FactureSuiviAssureur } from '@/lib/types/bordereau'
+import type { FactureSuiviAssureur } from '@/lib/types/bordereau'
 import { notifyEventAsync } from '@/lib/notifications/create-notification'
 import { formatFactureNumero } from '@/lib/formatting'
 
@@ -121,6 +122,7 @@ function mapFactureListRow(
     assuranceId: bigint | null
     assurance: { id: bigint; nom: string } | null
     bordereauFacture: {
+      statut: string
       bordereau: { id: bigint; numero: string; statut: string }
     } | null
     _count: { feuilles: number }
@@ -133,11 +135,13 @@ function mapFactureListRow(
     const assuranceNom = f.assurance?.nom ?? null
     const nonAssure = assuranceNom ? isNonAssureAssuranceName(assuranceNom) : !f.assuranceId
     if (!nonAssure && (f.assuranceId || f.assurance)) {
-      const b = f.bordereauFacture?.bordereau
+      const bf = f.bordereauFacture
       suiviAssureur = {
-        statut: suiviAssureurFromBordereau(b?.statut as BordereauStatut | undefined),
-        bordereauId: b?.id.toString() ?? null,
-        bordereauNumero: b?.numero ?? null,
+        statut: bf
+          ? suiviAssureurFromBordereauFacture(bf.statut)
+          : 'A_DEPOSER',
+        bordereauId: bf?.bordereau.id.toString() ?? null,
+        bordereauNumero: bf?.bordereau.numero ?? null,
         assuranceId: (f.assuranceId ?? f.assurance?.id)?.toString() ?? null,
         assuranceNom,
       }
@@ -165,7 +169,8 @@ const factureListInclude = {
   _count: { select: { feuilles: true } },
   assurance: { select: { id: true, nom: true } },
   bordereauFacture: {
-    include: {
+    select: {
+      statut: true,
       bordereau: { select: { id: true, numero: true, statut: true } },
     },
   },
@@ -174,8 +179,12 @@ const factureListInclude = {
 export async function listFactures(params?: {
   q?: string
   statut?: string
+  /** Factures déposées (ligne DEPOSE) non encore payées par l'assureur */
+  view?: 'all' | 'recouvrement' | 'paye'
 }): Promise<FactureListRow[]> {
-  const where: { statut?: string; OR?: object[] } = {}
+  const view = params?.view ?? 'all'
+  const where: Record<string, unknown> = {}
+
   if (params?.statut && params.statut !== 'all') {
     where.statut = params.statut
   }
@@ -184,6 +193,22 @@ export async function listFactures(params?: {
     where.OR = [
       { numero: { contains: term, mode: 'insensitive' } },
       ...( /^\d+$/.test(term) ? [{ patientId: BigInt(term) }] : []),
+    ]
+  }
+
+  if (view === 'recouvrement') {
+    where.bordereauFacture = { statut: 'DEPOSE' }
+    where.montantAssurance = { gt: 0 }
+  } else if (view === 'paye') {
+    where.statut = { not: 'BROUILLON' }
+    where.AND = [
+      { OR: [{ statut: 'PAYEE' }, { montantPatient: 0 }] },
+      {
+        OR: [
+          { montantAssurance: 0 },
+          { bordereauFacture: { statut: 'PAYE' } },
+        ],
+      },
     ]
   }
 
@@ -220,6 +245,7 @@ function buildSuiviAssureur(
     assuranceId: bigint | null
     assurance: { id: bigint; nom: string } | null
     bordereauFacture: {
+      statut: string
       bordereau: { id: bigint; numero: string; statut: string }
     } | null
     visite: { dateVisite: Date }
@@ -238,11 +264,13 @@ function buildSuiviAssureur(
   }
   if (!assuranceId) return null
 
-  const b = f.bordereauFacture?.bordereau
+  const bf = f.bordereauFacture
   return {
-    statut: suiviAssureurFromBordereau(b?.statut as BordereauStatut | undefined),
-    bordereauId: b?.id.toString() ?? null,
-    bordereauNumero: b?.numero ?? null,
+    statut: bf
+      ? suiviAssureurFromBordereauFacture(bf.statut)
+      : 'A_DEPOSER',
+    bordereauId: bf?.bordereau.id.toString() ?? null,
+    bordereauNumero: bf?.bordereau.numero ?? null,
     assuranceId: assuranceId.toString(),
     assuranceNom,
   }
@@ -263,9 +291,15 @@ export async function getFactureById(id: string): Promise<FactureDetail | null> 
           feuille: { select: { id: true, numero: true, libelle: true } },
         },
       },
+      prescriptions: {
+        include: {
+          prescription: { select: { id: true, numero: true, libelle: true } },
+        },
+      },
       assurance: { select: { id: true, nom: true } },
       bordereauFacture: {
-        include: {
+        select: {
+          statut: true,
           bordereau: { select: { id: true, numero: true, statut: true } },
         },
       },
@@ -285,6 +319,23 @@ export async function getFactureById(id: string): Promise<FactureDetail | null> 
       feuilleId: link.feuille.id.toString(),
       numero: link.feuille.numero,
       libelle: link.feuille.libelle,
+      kind: 'feuille' as const,
+      montantPatient: totaux.totalPatient,
+      montantAssurance: totaux.totalAssurance,
+      lignes,
+      totaux,
+    })
+  }
+
+  const prescriptionIds: bigint[] = []
+  for (const link of f.prescriptions) {
+    prescriptionIds.push(link.prescriptionId)
+    const { lignes, totaux } = await loadPrescriptionLignes(link.prescriptionId)
+    feuilles.push({
+      feuilleId: link.prescription.id.toString(),
+      numero: link.prescription.numero,
+      libelle: link.prescription.libelle,
+      kind: 'prescription' as const,
       montantPatient: totaux.totalPatient,
       montantAssurance: totaux.totalAssurance,
       lignes,
@@ -295,6 +346,7 @@ export async function getFactureById(id: string): Promise<FactureDetail | null> 
   const { rows: historiquePaiements, totalEncaisse } = await loadFactureHistoriquePaiements(
     f.id,
     feuilleIds,
+    prescriptionIds,
   )
 
   const medecinNom = f.visite.medecin

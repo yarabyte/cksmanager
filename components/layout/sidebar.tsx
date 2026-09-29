@@ -41,6 +41,7 @@ import {
   BarChart3,
   Calendar,
   ClipboardList,
+  BedDouble,
   CalendarCheck,
   UserPlus,
   CreditCard,
@@ -64,6 +65,7 @@ import {
   FolderHeart,
   Flower2,
   Baby,
+  Inbox,
 } from "lucide-react"
 import type { SidebarUser } from "@/lib/auth/types"
 import {
@@ -77,6 +79,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { useSortiesNavCount } from "@/hooks/use-sorties-nav"
 import { useSalleAttenteNavCount } from "@/hooks/use-parametres-patient"
 import { useVisiteNavCount } from "@/hooks/use-visites"
+import { useBacFactureNavCount } from "@/hooks/use-bac-facture-nav"
 import type { NavGroup, NavItem } from "@/lib/types"
 import type { PermissionMatrix } from "@/lib/permissions-matrix"
 
@@ -132,6 +135,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   BarChart3,
   Calendar,
   ClipboardList,
+  BedDouble,
   CalendarCheck,
   UserPlus,
   CreditCard,
@@ -156,12 +160,14 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   FolderHeart,
   Flower2,
   Baby,
+  Inbox,
 }
 
 function NavItemCountBadge({ href, badge }: { href: string; badge?: number }) {
   if (badge == null) return null
   if (href === "/pharmacie/sorties" && badge <= 0) return null
   if (href === "/medical/salle-attente" && badge <= 0) return null
+  if (href === "/facturation/bac" && badge <= 0) return null
   return (
     <Badge
       variant="secondary"
@@ -171,6 +177,8 @@ function NavItemCountBadge({ href, badge }: { href: string; badge?: number }) {
         href === "/pharmacie/sorties" && "border-amber-300 bg-amber-50 text-amber-800",
         href === "/medical/salle-attente" &&
           "border-blue-200 bg-blue-50 text-blue-700",
+        href === "/facturation/bac" &&
+          "border-[#cd3b86]/25 bg-[#cd3b86]/10 text-[#cd3b86]",
       )}
     >
       {badge}
@@ -359,9 +367,13 @@ function SidebarContent({
   const { data: sortiesCount } = useSortiesNavCount(showSortiesBadge)
   const roles = user.roles?.length ? user.roles : [user.role]
   const showSalleAttenteBadge = roles.some((r) =>
-    ["Admin", "Manager", "Médecin"].includes(r),
+    ["Admin", "Manager", "Médecin", "Sage femme"].includes(r),
   )
   const { data: salleAttenteCount } = useSalleAttenteNavCount(showSalleAttenteBadge)
+  const showBacBadge = roles.some((r) =>
+    ["Admin", "Manager", "Caisse"].includes(r),
+  )
+  const { data: bacCount } = useBacFactureNavCount(showBacBadge)
   const baseGroups = user.customGroup
     ? getNavigationForCustomGroup(user.customGroup)
     : filterNavGroupsByPermissions(getNavigationForRoles(roles), permissionMatrix, roles)
@@ -369,6 +381,7 @@ function SidebarContent({
     "/visites": visiteStats?.aujourd_hui,
     "/pharmacie/sorties": sortiesCount,
     "/medical/salle-attente": salleAttenteCount,
+    "/facturation/bac": bacCount,
   })
   const roleConfig = user.customGroup
     ? { label: user.customGroup.label, className: "bg-slate-100 text-slate-700 border border-slate-200" }
@@ -383,15 +396,16 @@ function SidebarContent({
     <div className="flex h-full flex-col">
       {/* Logo */}
       <div className={cn(
-        "flex h-16 items-center border-b border-sidebar-border px-4",
+        "flex h-16 items-center border-b border-sidebar-border/80 px-4",
+        "bg-gradient-to-b from-white/40 to-transparent dark:from-white/[0.03]",
         collapsed ? "justify-center" : "justify-between"
       )}>
         <Link href="/dashboard" className="flex items-center gap-2" onClick={onItemClick}>
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-emerald-700 shadow-sm shadow-primary/20">
             <span className="text-sm font-bold text-primary-foreground">CKS</span>
           </div>
           {!collapsed && (
-            <span className="text-lg font-semibold text-foreground">Manager</span>
+            <span className="text-lg font-semibold text-foreground tracking-tight">Manager</span>
           )}
         </Link>
         {!collapsed && onCollapsedChange && (
@@ -524,7 +538,10 @@ export function Sidebar({
   if (isMobile) {
     return (
       <Sheet open={mobileOpen} onOpenChange={onMobileOpenChange}>
-        <SheetContent side="left" className="w-64 p-0 [&>button]:hidden">
+        <SheetContent
+          side="left"
+          className="sidebar-surface w-64 border-sidebar-border p-0 [&>button]:hidden"
+        >
           <SidebarContent
             collapsed={false}
             onItemClick={() => onMobileOpenChange(false)}
@@ -539,7 +556,7 @@ export function Sidebar({
   // Desktop: Fixed sidebar
   return (
     <aside className={cn(
-      "fixed left-0 top-0 z-40 h-screen border-r border-sidebar-border bg-sidebar transition-all duration-300",
+      "sidebar-surface fixed left-0 top-0 z-40 h-screen border-r border-sidebar-border transition-all duration-300",
       collapsed ? "w-16" : "w-64"
     )}>
       <SidebarContent

@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import {
   ArrowLeft,
   Plus,
+  Minus,
   Trash2,
   Stethoscope,
   Loader2,
@@ -631,7 +632,7 @@ export function FeuilleForm(props: FeuilleFormProps) {
               <TableRow>
                 <TableHead className="min-w-[260px] w-[260px] whitespace-nowrap">Catégorie</TableHead>
                 <TableHead className="min-w-[320px] w-[320px]">Acte / Produit</TableHead>
-                <TableHead className="w-[72px] text-center">Qté</TableHead>
+                <TableHead className="w-[110px] text-center">Qté</TableHead>
                 <TableHead className="w-[120px] hidden md:table-cell">PU</TableHead>
                 <TableHead className="w-[120px]">HNC</TableHead>
                 <TableHead className="text-right w-[120px]">Assurance</TableHead>
@@ -720,19 +721,48 @@ export function FeuilleForm(props: FeuilleFormProps) {
                     </TableCell>
                     <TableCell className="text-center">
                       {canEditLines ? (
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={line.quantite}
-                          onChange={(e) => {
-                            const raw = e.target.value.replace(/\D/g, "")
-                            updateLine(line.key, {
-                              quantite: Math.max(1, Number(raw) || 1),
-                            })
-                          }}
-                          className="w-full min-w-[2.5rem] bg-transparent p-0 text-center text-sm font-medium tabular-nums text-gray-700 outline-none"
-                          aria-label="Quantité"
-                        />
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            disabled={qty <= 1}
+                            onClick={() =>
+                              updateLine(line.key, {
+                                quantite: Math.max(1, qty - 1),
+                              })
+                            }
+                            aria-label="Diminuer la quantité"
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </Button>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={line.quantite}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/\D/g, "")
+                              updateLine(line.key, {
+                                quantite: Math.max(1, Number(raw) || 1),
+                              })
+                            }}
+                            className="w-8 shrink-0 bg-transparent p-0 text-center text-sm font-medium tabular-nums text-gray-700 outline-none"
+                            aria-label="Quantité"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() =>
+                              updateLine(line.key, { quantite: qty + 1 })
+                            }
+                            aria-label="Augmenter la quantité"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       ) : (
                         <span className="text-sm font-medium tabular-nums text-gray-700">
                           {line.quantite}

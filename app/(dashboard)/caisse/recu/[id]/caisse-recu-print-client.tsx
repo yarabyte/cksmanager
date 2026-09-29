@@ -10,7 +10,13 @@ import { formatCurrency, formatBirthAge, formatFactureNumero } from "@/lib/forma
 import { formatCategorieLabel } from "@/components/shared/categorie-icon"
 import type { EncaissementRecuDetail } from "@/lib/types/caisse"
 
-export function CaisseRecuPrintClient({ recu }: { recu: EncaissementRecuDetail }) {
+export function CaisseRecuPrintClient({
+  recu,
+  reprint = false,
+}: {
+  recu: EncaissementRecuDetail
+  reprint?: boolean
+}) {
   const router = useRouter()
   const dateEnc = new Date(recu.createdAt)
   const dateVisite = recu.dateVisite ? new Date(recu.dateVisite) : null
@@ -35,7 +41,7 @@ export function CaisseRecuPrintClient({ recu }: { recu: EncaissementRecuDetail }
           className="gap-2 bg-[#cd3b86] hover:bg-[#b8307a] text-white"
         >
           <Printer className="h-4 w-4" />
-          Imprimer
+          {reprint ? "Réimprimer" : "Imprimer"}
         </Button>
       </div>
 
@@ -69,6 +75,9 @@ export function CaisseRecuPrintClient({ recu }: { recu: EncaissementRecuDetail }
             </div>
             <div className="text-right shrink-0">
               <p className="text-[11px] font-bold uppercase tracking-wider">Reçu de caisse</p>
+              {reprint ? (
+                <p className="text-[11px] font-bold uppercase tracking-wider">Réimpression</p>
+              ) : null}
               <p className="text-sm font-bold">{recu.numero}</p>
               <p className="mt-1 text-[11px]">
                 {format(dateEnc, "dd/MM/yyyy HH:mm", { locale: fr })}

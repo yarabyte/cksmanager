@@ -1,11 +1,14 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import {
   ArrowDownLeft,
   ArrowUpRight,
   BookOpen,
+  Printer,
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Table,
@@ -17,6 +20,15 @@ import {
 } from "@/components/ui/table"
 import { formatCurrency, formatDateTime, formatTime } from "@/lib/formatting"
 import type { JournalCaisseJour } from "@/lib/types/caisse"
+
+function recuHref(l: JournalCaisseJour["lignes"][number]): string | null {
+  if (l.encaissementId) return `/caisse/recu/${l.encaissementId}?reprint=1`
+  if (l.versementId) return `/caisse/versement/${l.versementId}?reprint=1`
+  if (l.referenceType === "Encaissement" && l.referenceId) {
+    return `/caisse/recu/${l.referenceId}?reprint=1`
+  }
+  return null
+}
 
 export function CaisseJournalCard({
   journal,
@@ -67,55 +79,76 @@ export function CaisseJournalCard({
                   <TableHead>Patient</TableHead>
                   <TableHead>Mode</TableHead>
                   <TableHead className="text-right">Montant</TableHead>
+                  <TableHead className="w-[1%] text-right">Reçu</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {journal.lignes.map((l) => (
-                  <TableRow key={l.id}>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                      {showDateColumn
-                        ? formatDateTime(l.createdAt)
-                        : formatTime(l.createdAt)}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={
-                          l.sens === "ENCAISSEMENT"
-                            ? "inline-flex items-center gap-1 text-emerald-700 text-xs font-medium"
-                            : "inline-flex items-center gap-1 text-rose-700 text-xs font-medium"
-                        }
+                {journal.lignes.map((l) => {
+                  const href = recuHref(l)
+                  return (
+                    <TableRow key={l.id}>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {showDateColumn
+                          ? formatDateTime(l.createdAt)
+                          : formatTime(l.createdAt)}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={
+                            l.sens === "ENCAISSEMENT"
+                              ? "inline-flex items-center gap-1 text-emerald-700 text-xs font-medium"
+                              : "inline-flex items-center gap-1 text-rose-700 text-xs font-medium"
+                          }
+                        >
+                          {l.sens === "ENCAISSEMENT" ? (
+                            <ArrowDownLeft className="h-3 w-3" />
+                          ) : (
+                            <ArrowUpRight className="h-3 w-3" />
+                          )}
+                          {l.sens === "ENCAISSEMENT" ? "Enc." : "Déc."}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm max-w-[240px] truncate" title={l.libelle}>
+                        {l.libelle}
+                      </TableCell>
+                      <TableCell className="text-sm">{l.patientLabel ?? "—"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {l.modePaiement === "ESPECES"
+                          ? "Espèces"
+                          : l.modePaiement === "MOBILE_MONEY"
+                            ? "MoMo"
+                            : l.modePaiement === "PORTEFEUILLE"
+                              ? "Portemonnaie"
+                              : "—"}
+                      </TableCell>
+                      <TableCell
+                        className={`text-right font-medium ${
+                          l.sens === "ENCAISSEMENT" ? "text-emerald-700" : "text-rose-700"
+                        }`}
                       >
-                        {l.sens === "ENCAISSEMENT" ? (
-                          <ArrowDownLeft className="h-3 w-3" />
+                        {l.sens === "ENCAISSEMENT" ? "+" : "−"}
+                        {formatCurrency(l.montant)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {href ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1 px-2 text-xs text-gray-500 hover:text-[#cd3b86]"
+                            asChild
+                          >
+                            <Link href={href} target="_blank" title="Réimprimer le reçu">
+                              <Printer className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">Réimprimer</span>
+                            </Link>
+                          </Button>
                         ) : (
-                          <ArrowUpRight className="h-3 w-3" />
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
-                        {l.sens === "ENCAISSEMENT" ? "Enc." : "Déc."}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-sm max-w-[240px] truncate" title={l.libelle}>
-                      {l.libelle}
-                    </TableCell>
-                    <TableCell className="text-sm">{l.patientLabel ?? "—"}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {l.modePaiement === "ESPECES"
-                        ? "Espèces"
-                        : l.modePaiement === "MOBILE_MONEY"
-                          ? "MoMo"
-                          : l.modePaiement === "PORTEFEUILLE"
-                            ? "Portemonnaie"
-                            : "—"}
-                    </TableCell>
-                    <TableCell
-                      className={`text-right font-medium ${
-                        l.sens === "ENCAISSEMENT" ? "text-emerald-700" : "text-rose-700"
-                      }`}
-                    >
-                      {l.sens === "ENCAISSEMENT" ? "+" : "−"}
-                      {formatCurrency(l.montant)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>

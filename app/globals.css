@@ -43,15 +43,18 @@
   
   --radius: 0.5rem;
   
-  /* Sidebar */
-  --sidebar: oklch(0.98 0 0);
+  /* Sidebar — base + fin dégradé (vert clinique très léger) */
+  --sidebar: oklch(0.985 0.004 145);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.62 0.17 142);
   --sidebar-primary-foreground: oklch(1 0 0);
   --sidebar-accent: oklch(0.96 0.02 142);
   --sidebar-accent-foreground: oklch(0.145 0 0);
-  --sidebar-border: oklch(0.92 0 0);
+  --sidebar-border: oklch(0.92 0.01 145);
   --sidebar-ring: oklch(0.62 0.17 142);
+  --sidebar-gradient-from: oklch(0.995 0.006 145);
+  --sidebar-gradient-via: oklch(0.985 0.008 142);
+  --sidebar-gradient-to: oklch(0.975 0.012 140);
 }
 
 .dark {
@@ -93,14 +96,17 @@
   --chart-5: oklch(0.65 0.12 200);
   
   /* Sidebar */
-  --sidebar: oklch(0.14 0 0);
+  --sidebar: oklch(0.14 0.01 145);
   --sidebar-foreground: oklch(0.95 0 0);
   --sidebar-primary: oklch(0.68 0.17 142);
   --sidebar-primary-foreground: oklch(0.15 0 0);
   --sidebar-accent: oklch(0.22 0.02 142);
   --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.25 0 0);
+  --sidebar-border: oklch(0.25 0.01 145);
   --sidebar-ring: oklch(0.68 0.17 142);
+  --sidebar-gradient-from: oklch(0.16 0.015 145);
+  --sidebar-gradient-via: oklch(0.14 0.012 142);
+  --sidebar-gradient-to: oklch(0.12 0.018 140);
 }
 
 @theme inline {
@@ -177,6 +183,23 @@
 
 /* Custom scrollbar */
 @layer utilities {
+  .sidebar-surface {
+    background-color: var(--sidebar);
+    background-image:
+      linear-gradient(
+        165deg,
+        var(--sidebar-gradient-from) 0%,
+        var(--sidebar-gradient-via) 48%,
+        var(--sidebar-gradient-to) 100%
+      ),
+      linear-gradient(
+        90deg,
+        color-mix(in oklch, var(--sidebar-primary) 7%, transparent) 0%,
+        transparent 14%
+      );
+    background-blend-mode: normal;
+  }
+
   .font-mono {
     font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   }

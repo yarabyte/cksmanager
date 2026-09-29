@@ -446,9 +446,9 @@ export function SessionDetailClient({ session }: { session: CaisseSessionDetail 
                             className="h-7 gap-1 text-xs text-gray-400 hover:text-gray-600 px-2"
                             asChild
                           >
-                            <Link href={`/caisse/recu/${e.id}`} target="_blank">
+                            <Link href={`/caisse/recu/${e.id}?reprint=1`} target="_blank">
                               <Receipt className="h-3.5 w-3.5" />
-                              Reçu
+                              Réimprimer
                             </Link>
                           </Button>
                         </TableCell>

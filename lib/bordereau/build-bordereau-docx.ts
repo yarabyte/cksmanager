@@ -29,6 +29,7 @@ export type BordereauDocxParametres = {
 
 const STATUT_LABEL: Record<BordereauStatut, string> = {
   BROUILLON: 'Brouillon',
+  PARTIEL: 'Partiel',
   DEPOSE: 'Déposé',
   PAYE: 'Payé',
 }

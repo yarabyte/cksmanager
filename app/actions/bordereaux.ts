@@ -1,42 +1,39 @@
 'use server'
 
+import type { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { toSerializable } from '@/lib/json-bigint'
-import { requireUser } from '@/lib/auth/session'
+import { requirePermission } from '@/lib/permissions-guard'
 import { isNonAssureAssuranceName } from '@/lib/assurance/non-assure'
+import { notifyEventAsync } from '@/lib/notifications/create-notification'
 import {
   ensureFactureAssuranceId,
   nextBordereauNumero,
   resolveActiveAssuranceId,
   round2,
-  suiviAssureurFromBordereau,
+  suiviAssureurFromBordereauFacture,
+  deriveBordereauStatutFromLines,
 } from '@/lib/bordereau/helpers'
 import { resolvePatientLabels } from '@/lib/caisse/helpers'
 import {
   createBordereauSchema,
   deposerBordereauSchema,
+  annulerDepotBordereauFacturesSchema,
   payerBordereauSchema,
   updateBordereauFacturesSchema,
 } from '@/lib/validations/bordereau'
 import type {
   BordereauDetail,
+  BordereauFactureStatut,
   BordereauListRow,
   BordereauStatut,
   FactureEligibleBordereau,
   FactureSuiviAssureur,
 } from '@/lib/types/bordereau'
-import type { Role } from '@/lib/types'
-import { notifyEventAsync } from '@/lib/notifications/create-notification'
-
-const BORDEREAU_ROLES: Role[] = ['Admin', 'Manager']
 
 async function requireBordereauManager() {
-  const user = await requireUser()
-  if (!user.roles.some((r) => BORDEREAU_ROLES.includes(r))) {
-    throw new Error('Accès réservé au Manager et à l’Admin.')
-  }
-  return user
+  return requirePermission('assurances', 'view')
 }
 
 function parseDateOnly(value: string): Date {
@@ -48,10 +45,44 @@ function parseDateOnly(value: string): Date {
 function revalidateBordereaux(id?: string) {
   revalidatePath('/facturation')
   revalidatePath('/facturation/bordereaux')
+  revalidatePath('/facturation/recouvrement')
+  revalidatePath('/facturation/paye')
   if (id) {
     revalidatePath(`/facturation/bordereaux/${id}`)
     revalidatePath(`/facturation/bordereaux/${id}/imprimer`)
   }
+}
+
+async function syncBordereauStatut(
+  tx: Prisma.TransactionClient,
+  bordereauId: bigint,
+) {
+  const lines = await tx.bordereauFacture.findMany({
+    where: { bordereauId },
+    select: { statut: true, dateDepot: true, datePaiement: true, refVirement: true },
+  })
+  const statut = deriveBordereauStatutFromLines(lines.map((l) => l.statut))
+  const firstDepot = lines.find((l) => l.dateDepot)?.dateDepot ?? null
+  const firstPay = lines.find((l) => l.datePaiement)?.datePaiement ?? null
+  const firstRef = lines.find((l) => l.refVirement)?.refVirement ?? null
+  await tx.bordereauAssureur.update({
+    where: { id: bordereauId },
+    data: {
+      statut,
+      dateDepot: statut === 'BROUILLON' ? null : firstDepot,
+      datePaiement:
+        statut === 'PAYE'
+          ? firstPay
+          : statut === 'BROUILLON'
+            ? null
+            : firstPay,
+      refVirement: statut === 'PAYE' ? firstRef : null,
+      ...(statut === 'BROUILLON'
+        ? { noteDepot: null, deposeParId: null, payeParId: null }
+        : {}),
+      ...(statut === 'DEPOSE' || statut === 'PARTIEL' ? { payeParId: null } : {}),
+    },
+  })
 }
 
 export async function listBordereaux(params?: {
@@ -103,7 +134,12 @@ export async function getBordereauById(id: string): Promise<BordereauDetail | nu
     include: {
       assurance: { select: { nom: true, code: true } },
       factures: {
-        include: {
+        select: {
+          statut: true,
+          dateDepot: true,
+          datePaiement: true,
+          refVirement: true,
+          montantAssurance: true,
           facture: {
             select: {
               id: true,
@@ -142,6 +178,10 @@ export async function getBordereauById(id: string): Promise<BordereauDetail | nu
       dateVisite: l.facture.visite.dateVisite.toISOString(),
       montantAssurance: round2(Number(l.montantAssurance)),
       statutFacture: l.facture.statut,
+      statutAssureur: (l.statut as BordereauFactureStatut) || 'EN_BORDEREAU',
+      dateDepot: l.dateDepot ? l.dateDepot.toISOString() : null,
+      datePaiement: l.datePaiement ? l.datePaiement.toISOString() : null,
+      refVirement: l.refVirement,
     })),
   }) as BordereauDetail
 }
@@ -294,6 +334,7 @@ export async function createBordereau(
             bordereauId: bordereau.id,
             factureId: line.factureId,
             montantAssurance: line.montantAssurance,
+            statut: 'EN_BORDEREAU',
           },
         })
       }
@@ -319,33 +360,56 @@ export async function updateBordereauFactures(
     const id = BigInt(v.id)
     const factureIds = [...new Set(v.factureIds.map((fid) => BigInt(fid)))]
 
-    const bordereau = await prisma.bordereauAssureur.findUnique({ where: { id } })
+    const bordereau = await prisma.bordereauAssureur.findUnique({
+      where: { id },
+      include: { factures: { select: { factureId: true, statut: true } } },
+    })
     if (!bordereau) throw new Error('Bordereau introuvable.')
-    if (bordereau.statut !== 'BROUILLON') {
-      throw new Error('Seuls les bordereaux brouillon sont modifiables.')
+
+    const locked = bordereau.factures.filter((l) => l.statut !== 'EN_BORDEREAU')
+    for (const l of locked) {
+      if (!factureIds.some((fid) => fid === l.factureId)) {
+        throw new Error(
+          'Impossible de retirer une facture déjà déposée ou payée du bordereau.',
+        )
+      }
     }
 
-    const { lines, total } = await loadAndValidateFacturesForAssurance(
+    const { lines } = await loadAndValidateFacturesForAssurance(
       bordereau.assuranceId,
       factureIds,
       id,
     )
 
     await prisma.$transaction(async (tx) => {
-      await tx.bordereauFacture.deleteMany({ where: { bordereauId: id } })
+      // Conserve les lignes verrouillées ; remplace uniquement les EN_BORDEREAU
+      await tx.bordereauFacture.deleteMany({
+        where: { bordereauId: id, statut: 'EN_BORDEREAU' },
+      })
+      const lockedIds = new Set(locked.map((l) => l.factureId.toString()))
       for (const line of lines) {
+        if (lockedIds.has(line.factureId.toString())) continue
         await tx.bordereauFacture.create({
           data: {
             bordereauId: id,
             factureId: line.factureId,
             montantAssurance: line.montantAssurance,
+            statut: 'EN_BORDEREAU',
           },
         })
       }
+      const all = await tx.bordereauFacture.findMany({
+        where: { bordereauId: id },
+        select: { montantAssurance: true },
+      })
+      const montantTotal = round2(
+        all.reduce((s, l) => s + Number(l.montantAssurance), 0),
+      )
       await tx.bordereauAssureur.update({
         where: { id },
-        data: { montantTotal: total },
+        data: { montantTotal },
       })
+      await syncBordereauStatut(tx, id)
     })
 
     revalidateBordereaux(v.id)
@@ -365,10 +429,16 @@ export async function deleteBordereau(
     await requireBordereauManager()
     const bordereau = await prisma.bordereauAssureur.findUnique({
       where: { id: BigInt(id) },
+      include: { factures: { select: { statut: true } } },
     })
     if (!bordereau) throw new Error('Bordereau introuvable.')
-    if (bordereau.statut !== 'BROUILLON') {
-      throw new Error('Seuls les bordereaux brouillon peuvent être supprimés.')
+    if (
+      bordereau.factures.length === 0 ||
+      bordereau.factures.some((l) => l.statut !== 'EN_BORDEREAU')
+    ) {
+      throw new Error(
+        'Seuls les bordereaux dont toutes les factures sont encore « En bordereau » peuvent être supprimés.',
+      )
     }
 
     await prisma.bordereauAssureur.delete({ where: { id: BigInt(id) } })
@@ -389,32 +459,47 @@ export async function deposerBordereau(
     const user = await requireBordereauManager()
     const v = deposerBordereauSchema.parse(data)
     const id = BigInt(v.id)
+    const factureIds = [...new Set(v.factureIds.map((fid) => BigInt(fid)))]
 
     const bordereau = await prisma.bordereauAssureur.findUnique({
       where: { id },
-      include: { _count: { select: { factures: true } } },
+      include: {
+        factures: {
+          where: { factureId: { in: factureIds } },
+          select: { factureId: true, statut: true },
+        },
+      },
     })
     if (!bordereau) throw new Error('Bordereau introuvable.')
-    if (bordereau.statut !== 'BROUILLON') {
-      throw new Error('Seuls les bordereaux brouillon peuvent être déposés.')
+    if (bordereau.factures.length !== factureIds.length) {
+      throw new Error('Certaines factures ne font pas partie de ce bordereau.')
     }
-    if (bordereau._count.factures === 0) {
-      throw new Error('Le bordereau ne contient aucune facture.')
+    if (bordereau.factures.some((l) => l.statut !== 'EN_BORDEREAU')) {
+      throw new Error('Seules les factures « En bordereau » peuvent être déposées.')
     }
 
-    await prisma.bordereauAssureur.update({
-      where: { id },
-      data: {
-        statut: 'DEPOSE',
-        dateDepot: parseDateOnly(v.dateDepot),
-        noteDepot: v.noteDepot?.trim() || null,
-        deposeParId: user.id,
-      },
+    const dateDepot = parseDateOnly(v.dateDepot)
+    const noteDepot = v.noteDepot?.trim() || null
+
+    await prisma.$transaction(async (tx) => {
+      await tx.bordereauFacture.updateMany({
+        where: { bordereauId: id, factureId: { in: factureIds } },
+        data: {
+          statut: 'DEPOSE',
+          dateDepot,
+          noteDepot,
+        },
+      })
+      await tx.bordereauAssureur.update({
+        where: { id },
+        data: { deposeParId: user.id },
+      })
+      await syncBordereauStatut(tx, id)
     })
 
     notifyEventAsync({
       type: 'BORDEREAU_DEPOSE',
-      message: `Bordereau ${bordereau.numero} déposé`,
+      message: `Bordereau ${bordereau.numero} : ${factureIds.length} facture(s) déposée(s)`,
       href: `/facturation/bordereaux/${v.id}`,
       entityType: 'BordereauAssureur',
       entityId: id,
@@ -432,29 +517,44 @@ export async function deposerBordereau(
 }
 
 export async function annulerDepot(
-  id: string,
+  data: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     await requireBordereauManager()
-    const bordereau = await prisma.bordereauAssureur.findUnique({
-      where: { id: BigInt(id) },
-    })
-    if (!bordereau) throw new Error('Bordereau introuvable.')
-    if (bordereau.statut !== 'DEPOSE') {
-      throw new Error('Seul un bordereau déposé peut être annulé.')
-    }
+    const v = annulerDepotBordereauFacturesSchema.parse(data)
+    const id = BigInt(v.id)
+    const factureIds = [...new Set(v.factureIds.map((fid) => BigInt(fid)))]
 
-    await prisma.bordereauAssureur.update({
-      where: { id: BigInt(id) },
-      data: {
-        statut: 'BROUILLON',
-        dateDepot: null,
-        noteDepot: null,
-        deposeParId: null,
+    const bordereau = await prisma.bordereauAssureur.findUnique({
+      where: { id },
+      include: {
+        factures: {
+          where: { factureId: { in: factureIds } },
+          select: { factureId: true, statut: true },
+        },
       },
     })
+    if (!bordereau) throw new Error('Bordereau introuvable.')
+    if (bordereau.factures.length !== factureIds.length) {
+      throw new Error('Certaines factures ne font pas partie de ce bordereau.')
+    }
+    if (bordereau.factures.some((l) => l.statut !== 'DEPOSE')) {
+      throw new Error('Seules les factures déposées peuvent avoir leur dépôt annulé.')
+    }
 
-    revalidateBordereaux(id)
+    await prisma.$transaction(async (tx) => {
+      await tx.bordereauFacture.updateMany({
+        where: { bordereauId: id, factureId: { in: factureIds } },
+        data: {
+          statut: 'EN_BORDEREAU',
+          dateDepot: null,
+          noteDepot: null,
+        },
+      })
+      await syncBordereauStatut(tx, id)
+    })
+
+    revalidateBordereaux(v.id)
     return { ok: true }
   } catch (e) {
     return {
@@ -471,26 +571,47 @@ export async function payerBordereau(
     const user = await requireBordereauManager()
     const v = payerBordereauSchema.parse(data)
     const id = BigInt(v.id)
+    const factureIds = [...new Set(v.factureIds.map((fid) => BigInt(fid)))]
 
-    const bordereau = await prisma.bordereauAssureur.findUnique({ where: { id } })
+    const bordereau = await prisma.bordereauAssureur.findUnique({
+      where: { id },
+      include: {
+        factures: {
+          where: { factureId: { in: factureIds } },
+          select: { factureId: true, statut: true, montantAssurance: true },
+        },
+      },
+    })
     if (!bordereau) throw new Error('Bordereau introuvable.')
-    if (bordereau.statut !== 'DEPOSE') {
-      throw new Error('Seul un bordereau déposé peut être marqué payé.')
+    if (bordereau.factures.length !== factureIds.length) {
+      throw new Error('Certaines factures ne font pas partie de ce bordereau.')
+    }
+    if (bordereau.factures.some((l) => l.statut !== 'DEPOSE')) {
+      throw new Error('Seules les factures déposées peuvent être marquées payées.')
     }
 
-    await prisma.bordereauAssureur.update({
-      where: { id },
-      data: {
-        statut: 'PAYE',
-        datePaiement: parseDateOnly(v.datePaiement),
-        refVirement: v.refVirement.trim(),
-        payeParId: user.id,
-      },
+    const datePaiement = parseDateOnly(v.datePaiement)
+    const refVirement = v.refVirement.trim()
+
+    await prisma.$transaction(async (tx) => {
+      await tx.bordereauFacture.updateMany({
+        where: { bordereauId: id, factureId: { in: factureIds } },
+        data: {
+          statut: 'PAYE',
+          datePaiement,
+          refVirement,
+        },
+      })
+      await tx.bordereauAssureur.update({
+        where: { id },
+        data: { payeParId: user.id },
+      })
+      await syncBordereauStatut(tx, id)
     })
 
     notifyEventAsync({
       type: 'BORDEREAU_PAYE',
-      message: `Bordereau ${bordereau.numero} marqué payé`,
+      message: `Bordereau ${bordereau.numero} : ${factureIds.length} facture(s) payée(s)`,
       href: `/facturation/bordereaux/${v.id}`,
       entityType: 'BordereauAssureur',
       entityId: id,
@@ -515,7 +636,8 @@ export async function getFactureSuiviAssureur(
     include: {
       assurance: { select: { id: true, nom: true } },
       bordereauFacture: {
-        include: {
+        select: {
+          statut: true,
           bordereau: { select: { id: true, numero: true, statut: true } },
         },
       },
@@ -554,11 +676,13 @@ export async function getFactureSuiviAssureur(
     }
   }
 
-  const b = f.bordereauFacture?.bordereau
+  const bf = f.bordereauFacture
   return {
-    statut: suiviAssureurFromBordereau(b?.statut as BordereauStatut | undefined),
-    bordereauId: b?.id.toString() ?? null,
-    bordereauNumero: b?.numero ?? null,
+    statut: bf
+      ? suiviAssureurFromBordereauFacture(bf.statut)
+      : 'A_DEPOSER',
+    bordereauId: bf?.bordereau.id.toString() ?? null,
+    bordereauNumero: bf?.bordereau.numero ?? null,
     assuranceId: assuranceId.toString(),
     assuranceNom,
   }

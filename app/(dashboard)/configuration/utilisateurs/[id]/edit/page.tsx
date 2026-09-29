@@ -35,6 +35,11 @@ import {
   UserX,
   LayoutGrid,
   Pill,
+  Baby,
+  Check,
+  Key,
+  Eye,
+  EyeOff,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Layers } from "lucide-react"
@@ -42,6 +47,7 @@ import { useUser, useUserMutations } from "@/hooks/use-users"
 import { usePermissionsConfig } from "@/hooks/use-permissions-config"
 import { listCaissePostesForAssignment } from "@/app/actions/caisse-postes"
 import { listPharmaciesForAssignment } from "@/app/actions/pharmacie-ops"
+import { ALL_ROLES } from "@/lib/permissions"
 import {
   getInitialsFromFullName,
   isCaisseLegacyRole,
@@ -51,15 +57,17 @@ import {
   mapLegacyRoleStringToAppRoles,
   parseLegacyRoleTokens,
   serializeLegacyRoleTokens,
+  serializeAppRolesToLegacy,
 } from "@/lib/user-role"
 import type { UserUpdateValues } from "@/lib/validations/user"
-import type { Role } from "@/lib/types"
+import type { CustomGroup, Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 /* ------------------------------------------------------------------ */
 /* Constantes & styles                                                  */
 /* ------------------------------------------------------------------ */
 
+const EMPTY_CUSTOM_GROUPS: CustomGroup[] = []
 const cardSurface =
   "rounded-2xl border border-gray-100 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
 
@@ -68,9 +76,28 @@ const selectTriggerClass = "h-10 bg-gray-50 border-gray-200 rounded-xl text-sm"
 
 const TITRES = ["Docteur", "Professeur", "Monsieur", "Madame", "Mademoiselle"]
 
+function roleKey(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+}
+
+const BUILTIN_ROLE_KEYS = new Set(ALL_ROLES.map((r) => roleKey(r)))
+
+function builtinLegacyTokenForCustomGroup(group: { id: string; label: string }): string | null {
+  const key = roleKey(group.label)
+  const idKey = roleKey(group.id)
+  const match = ALL_ROLES.find((r) => roleKey(r) === key || roleKey(r) === idKey)
+  if (!match) return null
+  return serializeAppRolesToLegacy([match])
+}
+
 const ROLES_APP = [
   { label: "Admin", value: "admin", icon: ShieldCheck },
   { label: "Médecin", value: "medecins", icon: Stethoscope },
+  { label: "Sage femme", value: "sage_femme", icon: Baby },
   { label: "Manager", value: "manager", icon: UserCog },
   { label: "Front Office", value: "front_office", icon: LayoutGrid },
   { label: "Caisse", value: "caisse", icon: Wallet },
@@ -95,6 +122,13 @@ function roleStyle(role: Role | null): RoleStyle {
         banner: "from-blue-500 to-blue-600",
         light: "bg-blue-50/80 text-blue-600 border-blue-100",
         wash: "from-blue-200/50 via-blue-50/40 to-transparent",
+      }
+    case "Sage femme":
+      return {
+        avatar: "bg-rose-50 text-rose-600",
+        banner: "from-rose-500 to-rose-600",
+        light: "bg-rose-50/80 text-rose-600 border-rose-100",
+        wash: "from-rose-200/50 via-rose-50/40 to-transparent",
       }
     case "Manager":
       return {
@@ -230,9 +264,12 @@ export default function EditUserPage() {
   const { data: user, isPending, error, dataUpdatedAt } = useUser(userId)
   const { update } = useUserMutations()
   const { data: permissionsConfig } = usePermissionsConfig()
-  const customGroups = permissionsConfig?.customGroups ?? []
+  const customGroups = permissionsConfig?.customGroups ?? EMPTY_CUSTOM_GROUPS
 
   const [form, setForm] = React.useState<FormState>(DEFAULT_FORM)
+  const [password, setPassword] = React.useState("")
+  const [passwordConfirm, setPasswordConfirm] = React.useState("")
+  const [showPassword, setShowPassword] = React.useState(false)
   const [caissePostes, setCaissePostes] = React.useState<{ id: string; nom: string }[]>([])
   const [pharmacies, setPharmacies] = React.useState<{ id: string; nom: string }[]>([])
   const snapshotRef = React.useRef(user)
@@ -242,6 +279,12 @@ export default function EditUserPage() {
     const u = snapshotRef.current
     if (!u) return
     const legacyRoles = parseLegacyRoleTokens(u.roleRaw)
+    const duplicateGroup = customGroups.find(
+      (g) => g.id === u.roleRaw && builtinLegacyTokenForCustomGroup(g),
+    )
+    const mappedToken = duplicateGroup
+      ? builtinLegacyTokenForCustomGroup(duplicateGroup)
+      : null
     setForm({
       name: u.name,
       email: u.email,
@@ -250,13 +293,13 @@ export default function EditUserPage() {
       telephone: u.telephone ?? "",
       specialite: u.specialite ?? "",
       numeroOrdre: u.numeroOrdre ?? "",
-      roles: legacyRoles,
-      customGroupId: legacyRoles.length === 0 && u.roleRaw ? u.roleRaw : "",
+      roles: mappedToken ? [mappedToken] : legacyRoles,
+      customGroupId: legacyRoles.length === 0 && u.roleRaw && !mappedToken ? u.roleRaw : "",
       actif: u.actif,
       caissePosteId: u.caissePosteId ?? "",
       pharmacieId: u.pharmacieId ?? "",
     })
-  }, [userId, dataUpdatedAt])
+  }, [userId, dataUpdatedAt, permissionsConfig])
 
   const roleSerialized = serializeLegacyRoleTokens(form.roles)
   const showCaisseFields = isCaisseLegacyRole(roleSerialized)
@@ -308,6 +351,7 @@ export default function EditUserPage() {
       .catch(() => toast.error("Impossible de charger les pharmacies."))
   }, [showPharmacieFields])
 
+  const extraGroups = customGroups.filter((g) => !builtinLegacyTokenForCustomGroup(g))
   const selectedPosteNom =
     caissePostes.find((p) => p.id === form.caissePosteId)?.nom ?? user?.caissePosteNom
 
@@ -317,6 +361,16 @@ export default function EditUserPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (password || passwordConfirm) {
+      if (password.trim().length < 8) {
+        toast.error("Le mot de passe doit contenir au moins 8 caractères.")
+        return
+      }
+      if (password !== passwordConfirm) {
+        toast.error("Les mots de passe ne correspondent pas.")
+        return
+      }
+    }
     const payload: UserUpdateValues = {
       name: form.name,
       email: form.email,
@@ -330,6 +384,9 @@ export default function EditUserPage() {
       actif: form.actif,
       caissePosteId: showCaisseFields && form.caissePosteId ? form.caissePosteId : null,
       pharmacieId: showPharmacieFields && form.pharmacieId ? form.pharmacieId : null,
+      ...(password.trim()
+        ? { password: password.trim(), passwordConfirm: passwordConfirm.trim() }
+        : {}),
     }
     if (showCaisseFields && !form.caissePosteId) {
       toast.error("Sélectionnez un poste de caisse pour ce caissier.")
@@ -341,7 +398,13 @@ export default function EditUserPage() {
     }
     try {
       await update.mutateAsync({ id: userId, data: payload })
-      toast.success("Utilisateur mis à jour")
+      toast.success(
+        password.trim()
+          ? "Utilisateur mis à jour — mot de passe modifié"
+          : "Utilisateur mis à jour",
+      )
+      setPassword("")
+      setPasswordConfirm("")
       router.push("/configuration/utilisateurs")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur à l'enregistrement")
@@ -423,15 +486,8 @@ export default function EditUserPage() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
-                {previewRole ? (
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium",
-                      style.light,
-                    )}
-                  >
-                    {previewRole}
-                  </span>
+                {previewRoles.length > 0 ? (
+                  previewRoles.map((r) => <RoleBadge key={r} role={r} />)
                 ) : selectedCustomGroup ? (
                   <span className="inline-flex items-center rounded-full border border-teal-100 bg-teal-50/80 px-2.5 py-0.5 text-[11px] font-medium text-teal-700">
                     {selectedCustomGroup.label}
@@ -646,12 +702,15 @@ export default function EditUserPage() {
                           type="button"
                           onClick={() => toggleRole(r.value)}
                           className={cn(
-                            "flex flex-col items-center gap-1.5 rounded-xl border px-3 py-3 text-center transition-all",
+                            "relative flex flex-col items-center gap-1.5 rounded-xl border px-3 py-3 text-center transition-all",
                             selected
-                              ? cn(rs.light, "shadow-sm ring-1")
+                              ? cn(rs.light, "shadow-sm ring-1 ring-current/20")
                               : "border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50",
                           )}
                         >
+                          {selected && (
+                            <Check className="absolute right-2 top-2 h-3.5 w-3.5" />
+                          )}
                           <Icon className="h-4 w-4" />
                           <span className="text-[11px] font-semibold leading-tight">
                             {r.label}
@@ -662,7 +721,7 @@ export default function EditUserPage() {
                   </div>
                 </div>
 
-                {customGroups.length > 0 && (
+                {extraGroups.length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-xs font-semibold text-gray-600">
                       Groupes personnalisés
@@ -671,7 +730,7 @@ export default function EditUserPage() {
                       Un groupe personnalisé remplace les rôles applicatifs ci-dessus.
                     </p>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {customGroups.map((g) => {
+                      {extraGroups.map((g) => {
                         const selected = form.customGroupId === g.id
                         return (
                           <button
@@ -774,6 +833,56 @@ export default function EditUserPage() {
                     checked={form.actif}
                     onCheckedChange={(v) => set("actif", v)}
                   />
+                </div>
+
+                <div className="space-y-3 rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+                  <div className="flex items-center gap-2">
+                    <Key className="h-4 w-4 text-[#cd3b86]" />
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">Mot de passe</p>
+                      <p className="text-xs text-gray-500">
+                        Laissez vide pour ne pas le modifier. Sinon, 8 caractères minimum.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Nouveau mot de passe" htmlFor="password">
+                      <div className="relative">
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          autoComplete="new-password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className={cn(inputClass, "pr-9")}
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          onClick={() => setShowPassword((v) => !v)}
+                          aria-label={showPassword ? "Masquer" : "Afficher"}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    </Field>
+                    <Field label="Confirmation" htmlFor="passwordConfirm">
+                      <Input
+                        id="passwordConfirm"
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="new-password"
+                        value={passwordConfirm}
+                        onChange={(e) => setPasswordConfirm(e.target.value)}
+                        placeholder="••••••••"
+                        className={inputClass}
+                      />
+                    </Field>
+                  </div>
                 </div>
               </div>
             </section>

@@ -193,6 +193,11 @@ export function getRoleConfig(role: Role): {
         label: "Commis Pharmacie",
         className: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400",
       }
+    case "Sage femme":
+      return {
+        label: "Sage femme",
+        className: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400",
+      }
     default:
       return {
         label: role,

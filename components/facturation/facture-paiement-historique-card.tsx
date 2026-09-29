@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { encaissementTypeLabel } from "@/lib/facture/payment-history"
+import { encaissementTypeLabel } from "@/lib/facture/encaissement-labels"
 import { formatCurrency, formatDateTime } from "@/lib/formatting"
 import { cn } from "@/lib/utils"
 import type { FacturePaiementHistoriqueRow } from "@/lib/types/facture"
@@ -117,9 +117,9 @@ export function FacturePaiementHistoriqueCard({
                         className="h-7 gap-1 px-2 text-xs text-gray-400 hover:text-gray-600"
                         asChild
                       >
-                        <Link href={`/caisse/recu/${row.id}`} target="_blank">
+                        <Link href={`/caisse/recu/${row.id}?reprint=1`} target="_blank">
                           <Receipt className="h-3.5 w-3.5" />
-                          Reçu
+                          Réimprimer
                         </Link>
                       </Button>
                     </TableCell>

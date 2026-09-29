@@ -73,6 +73,13 @@ export type FeuilleDetail = {
     medecinNom: string | null
     medecinNumeroOrdre: string | null
   }
+  /** Présent si la visite est liée à une hospitalisation. */
+  hospitalisation: {
+    id: string
+    dateEntree: string
+    dateSortie: string | null
+    statut: 'EN_COURS' | 'SORTI'
+  } | null
   lignes: FeuilleLigneRow[]
   totaux: FeuilleTotaux
   /** Avoir ACTIF lié, si présent. */
