@@ -4,16 +4,26 @@ import { ALL_ROLES } from "./permissions-matrix"
 import type { PermissionMatrix } from "./permissions-matrix"
 import { moduleForPathname } from "./permissions-access"
 
+const caisseNavChildren: NavItem[] = [
+  { label: "Caisse", href: "/caisse", icon: "Wallet" },
+  { label: "Clôture", href: "/cloture", icon: "Lock" },
+  { label: "Historique", href: "/cloture/historique", icon: "FileText" },
+  { label: "Journal de caisse", href: "/caisse/journal", icon: "BookOpen" },
+]
+
 const caisseNavItem: NavItem = {
   label: "Gestion de la caisse",
   href: "/caisse",
   icon: "Wallet",
+  children: caisseNavChildren,
+}
+
+const caisseNavItemAdmin: NavItem = {
+  ...caisseNavItem,
   children: [
-    { label: "Caisse", href: "/caisse", icon: "Wallet" },
+    caisseNavChildren[0]!,
     { label: "Versements", href: "/caisse/versements", icon: "ArrowUpFromLine" },
-    { label: "Clôture", href: "/cloture", icon: "Lock" },
-    { label: "Historique", href: "/cloture/historique", icon: "FileText" },
-    { label: "Journal de caisse", href: "/caisse/journal", icon: "BookOpen" },
+    ...caisseNavChildren.slice(1),
   ],
 }
 
@@ -165,7 +175,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
                 { label: "Retours", href: "/pharmacie/retours", icon: "Undo2" },
               ],
             },
-            caisseNavItem,
+            caisseNavItemAdmin,
             { label: "Rapports", href: "/rapports", icon: "BarChart3" },
             configurationNavItem([
               { label: "Postes de caisse", href: "/configuration/caisses", icon: "Wallet" },
@@ -352,6 +362,7 @@ export function filterNavGroupsByPermissions(
   roles: Role[],
 ): NavGroup[] {
   const isAllowed = (item: NavItem) => {
+    if (item.href === "/caisse/versements" && !roles.includes("Admin")) return false
     const module = item.module ?? moduleForPathname(item.href)
     if (!module) return true
     return hasPermissionWithMatrixAny(matrix, roles, module, "view")
@@ -392,7 +403,7 @@ export const PAGE_CATALOG: PageCatalogItem[] = (() => {
       }
     }
   }
-  return [...seen.values()]
+  return [...seen.values()].filter((p) => p.href !== "/caisse/versements")
 })()
 
 /** Menu latéral d'un groupe personnalisé : baseNav + une sélection manuelle de pages. */

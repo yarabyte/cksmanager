@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { syncPgSerial } from '@/lib/db/sync-pg-serial'
 import { toSerializable } from '@/lib/json-bigint'
 import { requireUser, requireUserId } from '@/lib/auth/session'
+import { userIsAdmin } from '@/lib/user-role'
 import { hasPermissionForRoles } from '@/lib/permissions-server'
 import { mapLegacyRoleStringToAppRole } from '@/lib/user-role'
 import { round2, num, writeJournalCaisseEntry } from '@/lib/caisse/helpers'
@@ -257,7 +258,11 @@ export async function creerVersement(
   data: unknown,
 ): Promise<{ ok: true; versementId: string } | { ok: false; error: string }> {
   try {
-    const userId = await requireUserId()
+    const user = await requireUser()
+    if (!userIsAdmin(user.roles)) {
+      return { ok: false, error: 'Seuls les administrateurs peuvent enregistrer un versement.' }
+    }
+    const userId = user.id
     const v = versementSchema.parse(data)
     const session = await requireOpenSession(userId)
     const montant = round2(v.montant)
@@ -312,7 +317,9 @@ export async function creerVersement(
 }
 
 export async function getVersementsPageData(): Promise<VersementsPageData | null> {
-  const userId = await requireUserId()
+  const user = await requireUser()
+  if (!userIsAdmin(user.roles)) return null
+  const userId = user.id
   const session = await getOpenSessionForUser(userId)
   if (!session) return null
 

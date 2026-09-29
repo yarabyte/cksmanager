@@ -130,6 +130,10 @@ export function userHasAnyRole(
   return roles.some((r) => allowed.includes(r))
 }
 
+export function userIsAdmin(roles: Role[] | null | undefined): boolean {
+  return userHasAnyRole(roles, ["Admin"])
+}
+
 /**
  * Initiales monogramme (nom complet : prénom le plus souvent en dernier dans la base héritée).
  */

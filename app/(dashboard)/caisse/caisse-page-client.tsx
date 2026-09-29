@@ -60,11 +60,13 @@ export function CaissePageClient({
   initialPending,
   initialJournal,
   session,
+  canManageVersements,
 }: {
   initialStats: CaisseStats
   initialPending: { feuilles: CaisseEnAttenteItem[]; factures: CaisseEnAttenteItem[]; prescriptions: CaisseEnAttenteItem[] }
   initialJournal: JournalCaisseJour
   session: CaisseSessionActive
+  canManageVersements: boolean
 }) {
   const router = useRouter()
   const [stats, setStats] = React.useState(initialStats)
@@ -220,10 +222,12 @@ export function CaissePageClient({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => setShowVersement(true)}>
-            <ArrowUpFromLine className="h-4 w-4" />
-            Versement
-          </Button>
+          {canManageVersements ? (
+            <Button variant="outline" className="gap-2" onClick={() => setShowVersement(true)}>
+              <ArrowUpFromLine className="h-4 w-4" />
+              Versement
+            </Button>
+          ) : null}
           <Button variant="outline" className="gap-2" asChild>
             <Link href="/cloture">
               <Lock className="h-4 w-4" />
@@ -514,6 +518,7 @@ export function CaissePageClient({
         emptyMessage="Aucun mouvement enregistré aujourd'hui."
       />
 
+      {canManageVersements ? (
       <Dialog open={showVersement} onOpenChange={setShowVersement}>
         <DialogContent>
           <DialogHeader>
@@ -564,6 +569,7 @@ export function CaissePageClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      ) : null}
 
       <Dialog open={showRecharge} onOpenChange={setShowRecharge}>
         <DialogContent>

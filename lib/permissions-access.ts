@@ -1,5 +1,6 @@
 import type { AuthUser } from "@/lib/auth/types"
 import type { Action, CustomGroup, Module } from "@/lib/types"
+import { userIsAdmin } from "@/lib/user-role"
 import { hasPermissionWithMatrixAny } from "@/lib/permissions"
 import type { PermissionMatrix } from "@/lib/permissions-matrix"
 
@@ -28,6 +29,12 @@ const PATH_MODULES: { prefix: string; module: Module }[] = [
   { prefix: "/planning", module: "planning" },
   { prefix: "/rendez-vous", module: "planning" },
 ]
+
+/** Gestion des versements sortants : Admin uniquement. */
+export function isVersementsManagementPath(pathname: string): boolean {
+  const path = pathname.split("?")[0] ?? pathname
+  return path === "/caisse/versements" || path.startsWith("/caisse/versements/")
+}
 
 export function moduleForPathname(pathname: string): Module | null {
   const path = pathname.split("?")[0] ?? pathname
@@ -83,6 +90,9 @@ export function canViewPathname(
   const path = pathname.split("?")[0] ?? pathname
   if (!path || OPEN_PATH_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`))) {
     return true
+  }
+  if (isVersementsManagementPath(path) && !userIsAdmin(user.roles)) {
+    return false
   }
   if (user.customGroup) {
     return customGroupCanViewPath(user.customGroup, path)
