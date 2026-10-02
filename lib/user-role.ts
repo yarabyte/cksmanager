@@ -21,6 +21,9 @@ const LEGACY_ROLE_TO_APP: Record<string, Role> = {
   sage_femmes: "Sage femme",
   caisse: "Caisse",
   front_office: "Front Office",
+  "front office": "Front Office",
+  "front-office": "Front Office",
+  frontoffice: "Front Office",
   manager: "Manager",
   pharmacie: "Pharmacie",
   commis_pharmacie: "Commis Pharmacie",
@@ -75,6 +78,29 @@ export function customGroupLooksLikeSageFemme(group: {
 }): boolean {
   const haystack = `${normalizeRoleLabel(group.id)} ${normalizeRoleLabel(group.label)}`
   return haystack.includes("sage femme") || haystack.includes("sagefemme")
+}
+
+/** Groupe perso nommé comme le Front Office. */
+export function customGroupLooksLikeFrontOffice(group: {
+  id: string
+  label: string
+}): boolean {
+  const haystack = `${normalizeRoleLabel(group.id)} ${normalizeRoleLabel(group.label)}`
+  return (
+    haystack.includes("front office") ||
+    haystack.includes("frontoffice") ||
+    haystack.includes("accueil")
+  )
+}
+
+/** Si le groupe perso duplique un rôle fixe, renvoyer ce rôle. */
+export function builtinRoleFromCustomGroup(group: {
+  id: string
+  label: string
+}): Role | null {
+  if (customGroupLooksLikeSageFemme(group)) return "Sage femme"
+  if (customGroupLooksLikeFrontOffice(group)) return "Front Office"
+  return null
 }
 
 /**

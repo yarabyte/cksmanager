@@ -2,7 +2,7 @@ import { compare } from 'bcrypt'
 import { prisma } from '@/lib/prisma'
 import { loadPermissionsConfig } from '@/lib/permissions-server'
 import {
-  customGroupLooksLikeSageFemme,
+  builtinRoleFromCustomGroup,
   mapLegacyRoleStringToAppRole,
   mapLegacyRoleStringToAppRoles,
 } from '@/lib/user-role'
@@ -34,8 +34,9 @@ export async function authenticateUser(
   if (roles.length === 0 && user.role?.trim()) {
     const { customGroups } = await loadPermissionsConfig()
     const group = customGroups.find((g) => g.id === user.role!.trim())
-    if (group && customGroupLooksLikeSageFemme(group)) {
-      roles = ['Sage femme']
+    if (group) {
+      const builtin = builtinRoleFromCustomGroup(group)
+      if (builtin) roles = [builtin]
     }
   }
   const appRoles = roles.length > 0 ? roles : [DEFAULT_ROLE]

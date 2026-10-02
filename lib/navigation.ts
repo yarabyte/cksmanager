@@ -2,7 +2,7 @@ import type { CustomGroup, PageCatalogItem, Role, NavGroup, NavItem } from "./ty
 import { hasPermissionWithMatrixAny } from "./permissions"
 import { ALL_ROLES } from "./permissions-matrix"
 import type { PermissionMatrix } from "./permissions-matrix"
-import { moduleForPathname } from "./permissions-access"
+import { moduleForPathname, rolesAlwaysCanViewPatients } from "./permissions-access"
 
 const caisseNavChildren: NavItem[] = [
   { label: "Caisse", href: "/caisse", icon: "Wallet" },
@@ -380,6 +380,12 @@ export function filterNavGroupsByPermissions(
 ): NavGroup[] {
   const isAllowed = (item: NavItem) => {
     if (item.href === "/caisse/versements" && !roles.includes("Admin")) return false
+    if (
+      (item.href === "/patients" || item.href.startsWith("/patients/")) &&
+      rolesAlwaysCanViewPatients(roles)
+    ) {
+      return true
+    }
     const module = item.module ?? moduleForPathname(item.href)
     if (!module) return true
     return hasPermissionWithMatrixAny(matrix, roles, module, "view")

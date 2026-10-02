@@ -189,6 +189,11 @@ function mergeAbsentModules(matrix: PermissionMatrix): PermissionMatrix {
         }
       }
     }
+    if (role === "Caisse") {
+      if ((row.patients ?? []).length === 0) {
+        row.patients = ["view"]
+      }
+    }
     if (role === "Front Office") {
       if ((row.patients ?? []).length === 0) {
         row.patients = ["view", "create", "edit"]

@@ -1,6 +1,10 @@
 import type { AuthUser } from "@/lib/auth/types"
-import type { Action, CustomGroup, Module } from "@/lib/types"
-import { userIsAdmin } from "@/lib/user-role"
+import type { Action, CustomGroup, Module, Role } from "@/lib/types"
+import {
+  customGroupLooksLikeFrontOffice,
+  customGroupLooksLikeSageFemme,
+  userIsAdmin,
+} from "@/lib/user-role"
 import { hasPermissionWithMatrixAny } from "@/lib/permissions"
 import type { PermissionMatrix } from "@/lib/permissions-matrix"
 
@@ -48,6 +52,59 @@ export function moduleForPathname(pathname: string): Module | null {
   return null
 }
 
+/** Ces rôles voient toujours /patients, même si la matrice en base est vide. */
+const ROLES_ALWAYS_VIEW_PATIENTS: readonly Role[] = [
+  "Admin",
+  "Manager",
+  "Médecin",
+  "Sage femme",
+  "Front Office",
+  "Caisse",
+  "Pharmacie",
+  "Commis Pharmacie",
+]
+
+const ROLES_ALWAYS_EDIT_PATIENTS: readonly Role[] = [
+  "Admin",
+  "Manager",
+  "Médecin",
+  "Sage femme",
+  "Front Office",
+]
+
+export function rolesAlwaysCanViewPatients(roles: Role[] | null | undefined): boolean {
+  return (roles ?? []).some((r) => ROLES_ALWAYS_VIEW_PATIENTS.includes(r))
+}
+
+function userAlwaysHasPatientAction(
+  user: Pick<AuthUser, "roles" | "customGroup">,
+  action: Action,
+): boolean {
+  if (action === "delete") return user.roles.includes("Admin")
+  if (action === "view") {
+    if (user.roles.some((r) => ROLES_ALWAYS_VIEW_PATIENTS.includes(r))) return true
+    if (
+      user.customGroup &&
+      (customGroupLooksLikeFrontOffice(user.customGroup) ||
+        customGroupLooksLikeSageFemme(user.customGroup))
+    ) {
+      return true
+    }
+    return false
+  }
+  if (action === "create" || action === "edit") {
+    if (user.roles.some((r) => ROLES_ALWAYS_EDIT_PATIENTS.includes(r))) return true
+    if (
+      user.customGroup &&
+      (customGroupLooksLikeFrontOffice(user.customGroup) ||
+        customGroupLooksLikeSageFemme(user.customGroup))
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 function customGroupHasAction(
   group: CustomGroup,
   module: Module,
@@ -76,6 +133,7 @@ export function authUserHasPermission(
   module: Module,
   action: Action,
 ): boolean {
+  if (module === "patients" && userAlwaysHasPatientAction(user, action)) return true
   if (user.customGroup) {
     return customGroupHasAction(user.customGroup, module, action)
   }
@@ -94,10 +152,11 @@ export function canViewPathname(
   if (isVersementsManagementPath(path) && !userIsAdmin(user.roles)) {
     return false
   }
+  const module = moduleForPathname(path)
+  if (module === "patients" && userAlwaysHasPatientAction(user, "view")) return true
   if (user.customGroup) {
     return customGroupCanViewPath(user.customGroup, path)
   }
-  const module = moduleForPathname(path)
   if (!module) return true
   return hasPermissionWithMatrixAny(matrix, user.roles, module, "view")
 }
