@@ -559,7 +559,7 @@ function ComparisonMatrix({ matrix }: { matrix: PermissionMatrix }) {
                     </span>
                   </td>
                   {ALL_ROLES.map((role) => {
-                    const actions = matrix[role][module] ?? []
+                    const actions = matrix[role]?.[module] ?? []
                     const full = actions.length === ALL_ACTIONS.length
                     const partial = actions.length > 0 && !full
                     return (

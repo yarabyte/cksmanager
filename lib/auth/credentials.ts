@@ -1,6 +1,8 @@
 import { compare } from 'bcrypt'
 import { prisma } from '@/lib/prisma'
+import { loadPermissionsConfig } from '@/lib/permissions-server'
 import {
+  customGroupLooksLikeSageFemme,
   mapLegacyRoleStringToAppRole,
   mapLegacyRoleStringToAppRoles,
 } from '@/lib/user-role'
@@ -28,9 +30,16 @@ export async function authenticateUser(
     return { ok: false, error: 'Identifiants incorrects.' }
   }
 
-  const roles = mapLegacyRoleStringToAppRoles(user.role)
+  let roles = mapLegacyRoleStringToAppRoles(user.role)
+  if (roles.length === 0 && user.role?.trim()) {
+    const { customGroups } = await loadPermissionsConfig()
+    const group = customGroups.find((g) => g.id === user.role!.trim())
+    if (group && customGroupLooksLikeSageFemme(group)) {
+      roles = ['Sage femme']
+    }
+  }
   const appRoles = roles.length > 0 ? roles : [DEFAULT_ROLE]
-  const appRole = mapLegacyRoleStringToAppRole(user.role) ?? DEFAULT_ROLE
+  const appRole = mapLegacyRoleStringToAppRole(user.role) ?? (roles[0] ?? DEFAULT_ROLE)
   const payload: SessionPayload = {
     userId: user.id.toString(),
     email: user.email,

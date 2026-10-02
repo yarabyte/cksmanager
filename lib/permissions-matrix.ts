@@ -179,6 +179,16 @@ function mergeAbsentModules(matrix: PermissionMatrix): PermissionMatrix {
     if (!HOSPITALISATION_ROLES.has(role)) {
       row.hospitalisation = []
     }
+    if (role === "Sage femme") {
+      for (const [mod, actions] of Object.entries(SAGE_FEMME_DEFAULT) as [
+        Module,
+        Action[],
+      ][]) {
+        if (actions.length > 0 && (row[mod]?.length ?? 0) === 0) {
+          row[mod] = actions
+        }
+      }
+    }
     if (role === "Front Office") {
       const feuille = row.feuilleCirculation ?? []
       if (feuille.length === 0) {
@@ -263,7 +273,13 @@ export function slugifyGroupId(label: string, existingIds: string[]): string {
       .trim()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "groupe"
-  const reserved = new Set(ALL_ROLES.map((r) => r.toLowerCase()))
+  const reserved = new Set(
+    ALL_ROLES.flatMap((r) => {
+      const lower = r.toLowerCase()
+      const slug = lower.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+      return [lower, slug, slug.replace(/-/g, "_")]
+    }),
+  )
   const taken = new Set([...existingIds, ...reserved])
   if (!taken.has(base)) return base
   let i = 2

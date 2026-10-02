@@ -11,6 +11,12 @@ const caisseNavChildren: NavItem[] = [
   { label: "Journal de caisse", href: "/caisse/journal", icon: "BookOpen" },
 ]
 
+const patientsNavItem: NavItem = {
+  label: "Patients",
+  href: "/patients",
+  icon: "Users",
+}
+
 const caisseNavItem: NavItem = {
   label: "Gestion de la caisse",
   href: "/caisse",
@@ -135,7 +141,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
         {
           label: "Gestion",
           items: [
-            { label: "Patients", href: "/patients", icon: "Users" },
+            patientsNavItem,
             { label: "Visites", href: "/visites", icon: "Stethoscope" },
             {
               label: "Feuille de circulation",
@@ -195,7 +201,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
         {
           label: "Gestion",
           items: [
-            { label: "Patients", href: "/patients", icon: "Users" },
+            patientsNavItem,
             { label: "Visites", href: "/visites", icon: "Stethoscope" },
             {
               label: "Feuille de circulation",
@@ -261,7 +267,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
         {
           label: "Suivi",
           items: [
-            { label: "Patients", href: "/patients", icon: "Users" },
+            patientsNavItem,
             { label: "Visites", href: "/visites", icon: "Stethoscope" },
             {
               label: "Hospitalisation",
@@ -290,7 +296,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
         {
           label: "Accueil",
           items: [
-            { label: "Patients", href: "/patients", icon: "Users" },
+            patientsNavItem,
             { label: "Rendez-vous", href: "/rendez-vous", icon: "CalendarCheck" },
             { label: "Visites", href: "/visites", icon: "UserPlus" },
             {
@@ -309,6 +315,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
         {
           label: "Encaissements",
           items: [
+            patientsNavItem,
             caisseNavItem,
             { label: "Factures", href: "/facturation", icon: "Receipt", children: [
               { label: "Factures", href: "/facturation", icon: "Receipt" },
@@ -355,6 +362,16 @@ export function getNavigationForRole(role: Role): NavGroup[] {
   }
 }
 
+function navHasHref(groups: NavGroup[], href: string): boolean {
+  return groups.some((group) =>
+    group.items.some(
+      (item) =>
+        item.href === href ||
+        (item.children ?? []).some((child) => child.href === href),
+    ),
+  )
+}
+
 /** Retire les items (et sous-items) dont le module de droits n'est pas autorisé pour ces rôles. */
 export function filterNavGroupsByPermissions(
   groups: NavGroup[],
@@ -368,7 +385,7 @@ export function filterNavGroupsByPermissions(
     return hasPermissionWithMatrixAny(matrix, roles, module, "view")
   }
 
-  return groups
+  const filtered = groups
     .map((group) => ({
       ...group,
       items: group.items
@@ -380,6 +397,30 @@ export function filterNavGroupsByPermissions(
         ),
     }))
     .filter((group) => group.items.length > 0)
+
+  if (
+    !hasPermissionWithMatrixAny(matrix, roles, "patients", "view") ||
+    navHasHref(filtered, "/patients")
+  ) {
+    return filtered
+  }
+
+  const insert = { ...patientsNavItem }
+  if (filtered.length === 0) {
+    return [{ items: [insert] }]
+  }
+
+  const firstIsDashboardOnly = filtered[0]!.items.every(
+    (item) => item.href === "/dashboard",
+  )
+  if (firstIsDashboardOnly && filtered.length === 1) {
+    return [...filtered, { label: "Accueil", items: [insert] }]
+  }
+
+  const targetIndex = firstIsDashboardOnly && filtered.length > 1 ? 1 : 0
+  return filtered.map((group, i) =>
+    i === targetIndex ? { ...group, items: [insert, ...group.items] } : group,
+  )
 }
 
 /** Catalogue de toutes les pages existantes (dédupliquées par href), pour composer le menu d'un groupe personnalisé. */

@@ -17,6 +17,8 @@ const LEGACY_ROLE_TO_APP: Record<string, Role> = {
   sage_femme: "Sage femme",
   sagefemme: "Sage femme",
   "sage femme": "Sage femme",
+  "sage-femme": "Sage femme",
+  sage_femmes: "Sage femme",
   caisse: "Caisse",
   front_office: "Front Office",
   manager: "Manager",
@@ -54,6 +56,25 @@ function splitLegacyTokens(role: string | null | undefined): string[] {
     .split(/[,;|]/)
     .map((t) => t.trim().toLowerCase())
     .filter(Boolean)
+}
+
+function normalizeRoleLabel(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+/** Groupe perso créé sous le même nom que le rôle fixe — à traiter comme Sage femme. */
+export function customGroupLooksLikeSageFemme(group: {
+  id: string
+  label: string
+}): boolean {
+  const haystack = `${normalizeRoleLabel(group.id)} ${normalizeRoleLabel(group.label)}`
+  return haystack.includes("sage femme") || haystack.includes("sagefemme")
 }
 
 /**

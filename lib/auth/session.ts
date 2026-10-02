@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import {
+  customGroupLooksLikeSageFemme,
   mapLegacyRoleStringToAppRole,
   mapLegacyRoleStringToAppRoles,
 } from '@/lib/user-role'
@@ -54,6 +55,17 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     const { customGroups } = await loadPermissionsConfig()
     const group = customGroups.find((g) => g.id === rawRole)
     if (group) {
+      if (customGroupLooksLikeSageFemme(group)) {
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: 'Sage femme',
+          roles: ['Sage femme'],
+          legacyRole: user.role,
+          customGroup: null,
+        }
+      }
       return {
         id: user.id,
         email: user.email,
