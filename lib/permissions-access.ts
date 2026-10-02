@@ -76,6 +76,23 @@ export function rolesAlwaysCanViewPatients(roles: Role[] | null | undefined): bo
   return (roles ?? []).some((r) => ROLES_ALWAYS_VIEW_PATIENTS.includes(r))
 }
 
+/** Le Front Office imprime les factures du bac, même si le module facturation est vide en base. */
+const ROLES_ALWAYS_VIEW_BAC: readonly Role[] = ["Front Office"]
+
+export function isBacFacturePath(pathname: string): boolean {
+  const path = pathname.split("?")[0] ?? pathname
+  return path === "/facturation/bac" || path.startsWith("/facturation/bac/")
+}
+
+export function rolesAlwaysCanViewBac(roles: Role[] | null | undefined): boolean {
+  return (roles ?? []).some((r) => ROLES_ALWAYS_VIEW_BAC.includes(r))
+}
+
+function userAlwaysCanViewBac(user: Pick<AuthUser, "roles" | "customGroup">): boolean {
+  if (rolesAlwaysCanViewBac(user.roles)) return true
+  return Boolean(user.customGroup && customGroupLooksLikeFrontOffice(user.customGroup))
+}
+
 function userAlwaysHasPatientAction(
   user: Pick<AuthUser, "roles" | "customGroup">,
   action: Action,
@@ -152,6 +169,7 @@ export function canViewPathname(
   if (isVersementsManagementPath(path) && !userIsAdmin(user.roles)) {
     return false
   }
+  if (isBacFacturePath(path) && userAlwaysCanViewBac(user)) return true
   const module = moduleForPathname(path)
   if (module === "patients" && userAlwaysHasPatientAction(user, "view")) return true
   if (user.customGroup) {

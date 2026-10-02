@@ -202,6 +202,9 @@ function mergeAbsentModules(matrix: PermissionMatrix): PermissionMatrix {
       if (feuille.length === 0) {
         row.feuilleCirculation = ["view", "create", "edit"]
       }
+      if ((row.facturation ?? []).length === 0) {
+        row.facturation = ["view"]
+      }
     }
     out[role] = row
   }

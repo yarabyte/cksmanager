@@ -2,7 +2,11 @@ import type { CustomGroup, PageCatalogItem, Role, NavGroup, NavItem } from "./ty
 import { hasPermissionWithMatrixAny } from "./permissions"
 import { ALL_ROLES } from "./permissions-matrix"
 import type { PermissionMatrix } from "./permissions-matrix"
-import { moduleForPathname, rolesAlwaysCanViewPatients } from "./permissions-access"
+import {
+  moduleForPathname,
+  rolesAlwaysCanViewBac,
+  rolesAlwaysCanViewPatients,
+} from "./permissions-access"
 
 const caisseNavChildren: NavItem[] = [
   { label: "Caisse", href: "/caisse", icon: "Wallet" },
@@ -305,6 +309,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
               icon: "ScrollText",
               module: "feuilleCirculation",
             },
+            { label: "Bac à facture", href: "/facturation/bac", icon: "Inbox" },
           ],
         },
       ]
@@ -383,6 +388,12 @@ export function filterNavGroupsByPermissions(
     if (
       (item.href === "/patients" || item.href.startsWith("/patients/")) &&
       rolesAlwaysCanViewPatients(roles)
+    ) {
+      return true
+    }
+    if (
+      (item.href === "/facturation/bac" || item.href.startsWith("/facturation/bac/")) &&
+      rolesAlwaysCanViewBac(roles)
     ) {
       return true
     }
