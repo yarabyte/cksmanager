@@ -33,7 +33,7 @@ import {
 } from "@/lib/formatting"
 import { formatWhatsAppPhoneDisplay, isValidWhatsAppPhone } from "@/lib/phone"
 import { formatCategorieLabel } from "@/components/shared/categorie-icon"
-import { isNonAssureAssuranceName } from "@/lib/assurance/non-assure"
+import { isNonAssureAssuranceName } from "@/lib/assurance/non-assure-name"
 import {
   canAssignAssurance,
   isAssurancePromoteur,
