@@ -114,7 +114,7 @@ export default function PatientsPage() {
   const { data, isLoading, error, refetch } = usePatientsList(debouncedQ, skip, pageSize, sexeFilter, assuranceFilter)
   const { data: assurancesRaw } = useAssurancesList()
   const assurances = assurancesRaw ?? []
-  const { data: categoriesRaw } = useCategoriesList()
+  const { data: categoriesRaw } = useCategoriesList(isNewPatientOpen)
   const categories = React.useMemo(
     () =>
       (categoriesRaw ?? []).map((c) => ({
@@ -133,7 +133,9 @@ export default function PatientsPage() {
       })),
     [assurances],
   )
-  const { data: select2Data, isPending: select2Loading } = usePatientSelect2Suggestions()
+  const { data: select2Data, isPending: select2Loading } = usePatientSelect2Suggestions(
+    isNewPatientOpen,
+  )
   const { data: visiteFormOptions } = useVisiteFormOptions(visiteDialogOpen)
 
   const items = data?.items ?? []
@@ -180,15 +182,17 @@ export default function PatientsPage() {
         />
       )}
 
-      <NouveauPatientWizard
-        open={isNewPatientOpen}
-        onOpenChange={setIsNewPatientOpen}
-        onCreated={() => void refetch()}
-        select2Suggestions={select2Data}
-        select2Loading={select2Loading}
-        assurances={assuranceOptions}
-        categories={categories}
-      />
+      {isNewPatientOpen ? (
+        <NouveauPatientWizard
+          open={isNewPatientOpen}
+          onOpenChange={setIsNewPatientOpen}
+          onCreated={() => void refetch()}
+          select2Suggestions={select2Data}
+          select2Loading={select2Loading}
+          assurances={assuranceOptions}
+          categories={categories}
+        />
+      ) : null}
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

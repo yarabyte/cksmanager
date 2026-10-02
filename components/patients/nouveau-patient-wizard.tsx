@@ -84,6 +84,7 @@ export function NouveauPatientWizard({
   const { data: currentUserId } = useQuery({
     queryKey: ["auth", "userId"],
     queryFn: getAuthUserId,
+    enabled: open,
   })
   const [step, setStep] = React.useState(1)
   const [patientForm, setPatientForm] = React.useState<PatientFormValues>(defaultPatientForm)

@@ -37,10 +37,11 @@ export function useActe(id: string | undefined) {
   })
 }
 
-export function useCategoriesList() {
+export function useCategoriesList(enabled = true) {
   return useQuery({
     queryKey: ['categorie_actes', 'list'],
     queryFn: () => listCategorieActes(),
+    enabled,
   })
 }
 

@@ -190,6 +190,9 @@ function mergeAbsentModules(matrix: PermissionMatrix): PermissionMatrix {
       }
     }
     if (role === "Front Office") {
+      if ((row.patients ?? []).length === 0) {
+        row.patients = ["view", "create", "edit"]
+      }
       const feuille = row.feuilleCirculation ?? []
       if (feuille.length === 0) {
         row.feuilleCirculation = ["view", "create", "edit"]

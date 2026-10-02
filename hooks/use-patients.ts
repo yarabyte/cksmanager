@@ -39,10 +39,11 @@ export function usePatient(id: string | undefined) {
 }
 
 /** Libellés déjà présents en base (`patients`) pour les Select2 lieu / adresse / profession. */
-export function usePatientSelect2Suggestions() {
+export function usePatientSelect2Suggestions(enabled = true) {
   return useQuery({
     queryKey: ['patients', 'select2-suggestions'],
     queryFn: getPatientSelect2Suggestions,
+    enabled,
     staleTime: 60_000,
   })
 }

@@ -382,40 +382,55 @@ export type PatientSelect2Suggestions = {
   professions: string[]
 }
 
+const EMPTY_SELECT2: PatientSelect2Suggestions = {
+  lieux: [],
+  adresses: [],
+  professions: [],
+}
+
+const SELECT2_LIMIT = 250
+
+function uniqueTrimmed(values: (string | null | undefined)[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of values) {
+    const s = (raw ?? '').trim()
+    if (!s || seen.has(s)) continue
+    seen.add(s)
+    out.push(s)
+    if (out.length >= SELECT2_LIMIT) break
+  }
+  return out
+}
+
 export async function getPatientSelect2Suggestions(): Promise<PatientSelect2Suggestions> {
-  const [lieuRows, adrRows, profRows] = await Promise.all([
-    prisma.patient.findMany({
-      select: { patLieuNaiss: true },
-      distinct: ['patLieuNaiss'],
-      where: { patLieuNaiss: { not: '' } },
-      orderBy: { patLieuNaiss: 'asc' },
-    }),
-    prisma.patient.findMany({
-      select: { patAdress: true },
-      distinct: ['patAdress'],
-      where: { patAdress: { not: '' } },
-      orderBy: { patAdress: 'asc' },
-    }),
-    prisma.patient.findMany({
-      select: { patProfession: true },
-      distinct: ['patProfession'],
-      where: { patProfession: { not: null } },
-      orderBy: { patProfession: 'asc' },
-    }),
-  ])
-
-  const lieux = lieuRows
-    .map((r) => r.patLieuNaiss.trim())
-    .filter((s) => s.length > 0)
-
-  const adresses = adrRows
-    .map((r) => r.patAdress.trim())
-    .filter((s) => s.length > 0)
-
-  const professions = profRows
-    .map((r) => r.patProfession)
-    .filter((s): s is string => s != null && s.trim() !== '')
-    .map((s) => s.trim())
-
-  return { lieux, adresses, professions }
+  try {
+    const [lieuRows, adrRows, profRows] = await Promise.all([
+      prisma.$queryRaw<{ v: string }[]>`
+        SELECT DISTINCT "PatLieuNaiss" AS v FROM patients
+        WHERE "PatLieuNaiss" IS NOT NULL AND TRIM("PatLieuNaiss") <> ''
+        ORDER BY 1 ASC
+        LIMIT 250
+      `,
+      prisma.$queryRaw<{ v: string }[]>`
+        SELECT DISTINCT "PatAdress" AS v FROM patients
+        WHERE "PatAdress" IS NOT NULL AND TRIM("PatAdress") <> ''
+        ORDER BY 1 ASC
+        LIMIT 250
+      `,
+      prisma.$queryRaw<{ v: string }[]>`
+        SELECT DISTINCT "PatProfession" AS v FROM patients
+        WHERE "PatProfession" IS NOT NULL AND TRIM("PatProfession") <> ''
+        ORDER BY 1 ASC
+        LIMIT 250
+      `,
+    ])
+    return {
+      lieux: uniqueTrimmed(lieuRows.map((r) => r.v)),
+      adresses: uniqueTrimmed(adrRows.map((r) => r.v)),
+      professions: uniqueTrimmed(profRows.map((r) => r.v)),
+    }
+  } catch {
+    return EMPTY_SELECT2
+  }
 }
