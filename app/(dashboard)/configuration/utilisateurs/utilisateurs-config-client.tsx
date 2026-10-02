@@ -43,7 +43,7 @@ import {
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { deleteUser, type UserConfigRow } from "@/app/actions/users"
+import { deleteUser, createUser, type UserConfigRow } from "@/app/actions/users"
 import { getInitialsFromFullName, isMedecinTitre } from "@/lib/user-role"
 import { ALL_ROLES } from "@/lib/permissions"
 import type { PermissionMatrix } from "@/lib/permissions-matrix"
@@ -300,6 +300,15 @@ export function UtilisateursConfigClient({
 }: Props) {
   const router = useRouter()
   const [isNewUserOpen, setIsNewUserOpen] = React.useState(false)
+  const [createPending, setCreatePending] = React.useState(false)
+  const [formFirstName, setFormFirstName] = React.useState("")
+  const [formLastName, setFormLastName] = React.useState("")
+  const [formEmail, setFormEmail] = React.useState("")
+  const [formRole, setFormRole] = React.useState<Role | "">("")
+  const [formPassword, setFormPassword] = React.useState("")
+  const [formActif, setFormActif] = React.useState(true)
+  const [formSpecialite, setFormSpecialite] = React.useState("")
+  const [formOrdre, setFormOrdre] = React.useState("")
   const [selectedKey, setSelectedKey] = React.useState<string>("Admin")
   const [activeTab, setActiveTab] = React.useState("users")
   const [formTitre, setFormTitre] = React.useState<string>("")
@@ -311,6 +320,49 @@ export function UtilisateursConfigClient({
 
   const showMedecinForm = isMedecinTitre(formTitre)
   const customGroupIds = initialCustomGroups.map((g) => g.id)
+
+  function resetNewUserForm() {
+    setFormTitre("")
+    setFormFirstName("")
+    setFormLastName("")
+    setFormEmail("")
+    setFormRole("")
+    setFormPassword("")
+    setFormActif(true)
+    setFormSpecialite("")
+    setFormOrdre("")
+  }
+
+  async function submitNewUser() {
+    if (!formRole) {
+      toast.error("Sélectionnez un rôle.")
+      return
+    }
+    setCreatePending(true)
+    try {
+      const res = await createUser({
+        firstName: formFirstName,
+        lastName: formLastName,
+        titre: formTitre || undefined,
+        specialite: formSpecialite || undefined,
+        numeroOrdre: formOrdre || undefined,
+        email: formEmail,
+        role: formRole,
+        password: formPassword,
+        actif: formActif,
+      })
+      if (!res.ok) {
+        toast.error(res.error)
+        return
+      }
+      toast.success("Utilisateur créé")
+      setIsNewUserOpen(false)
+      resetNewUserForm()
+      router.refresh()
+    } finally {
+      setCreatePending(false)
+    }
+  }
 
   async function confirmDelete() {
     if (!deleteTarget) return
@@ -414,7 +466,7 @@ export function UtilisateursConfigClient({
             </p>
           </div>
 
-          <Dialog open={isNewUserOpen} onOpenChange={(open) => { setIsNewUserOpen(open); if (!open) setFormTitre("") }}>
+          <Dialog open={isNewUserOpen} onOpenChange={(open) => { setIsNewUserOpen(open); if (!open) resetNewUserForm() }}>
             <DialogTrigger asChild>
               <Button className="gap-2 bg-gradient-to-r from-[#cd3b86] to-[#b8307a] hover:from-[#b8307a] hover:to-[#9b2563] text-white shadow-sm">
                 <Plus className="h-4 w-4" />
@@ -443,11 +495,11 @@ export function UtilisateursConfigClient({
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label htmlFor="nf-firstName" className="text-xs font-semibold text-gray-600">Prénom</Label>
-                        <Input id="nf-firstName" placeholder="Prénom" className="h-9 bg-gray-50 border-gray-200" />
+                        <Input id="nf-firstName" placeholder="Prénom" value={formFirstName} onChange={(e) => setFormFirstName(e.target.value)} className="h-9 bg-gray-50 border-gray-200" />
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="nf-lastName" className="text-xs font-semibold text-gray-600">Nom</Label>
-                        <Input id="nf-lastName" placeholder="Nom de famille" className="h-9 bg-gray-50 border-gray-200" />
+                        <Input id="nf-lastName" placeholder="Nom de famille" value={formLastName} onChange={(e) => setFormLastName(e.target.value)} className="h-9 bg-gray-50 border-gray-200" />
                       </div>
                     </div>
                     <div className="space-y-1.5">
@@ -469,11 +521,11 @@ export function UtilisateursConfigClient({
                         </div>
                         <div className="space-y-1.5">
                           <Label htmlFor="nf-specialite" className="text-xs font-semibold text-blue-700">Spécialité</Label>
-                          <Input id="nf-specialite" placeholder="ex. Pédiatre" className="h-9 border-blue-200 bg-white" />
+                          <Input id="nf-specialite" placeholder="ex. Pédiatre" value={formSpecialite} onChange={(e) => setFormSpecialite(e.target.value)} className="h-9 border-blue-200 bg-white" />
                         </div>
                         <div className="space-y-1.5">
                           <Label htmlFor="nf-ordre" className="text-xs font-semibold text-blue-700">N° d&apos;ordre</Label>
-                          <Input id="nf-ordre" placeholder="ex. 7523" className="h-9 border-blue-200 bg-white" />
+                          <Input id="nf-ordre" placeholder="ex. 7523" value={formOrdre} onChange={(e) => setFormOrdre(e.target.value)} className="h-9 border-blue-200 bg-white" />
                         </div>
                       </div>
                     )}
@@ -489,12 +541,12 @@ export function UtilisateursConfigClient({
                       <Label htmlFor="nf-email" className="text-xs font-semibold text-gray-600">Email</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                        <Input id="nf-email" type="email" placeholder="email@cks-clinic.cm" className="h-9 pl-8 bg-gray-50 border-gray-200" />
+                        <Input id="nf-email" type="email" placeholder="email@cks-clinic.cm" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} className="h-9 pl-8 bg-gray-50 border-gray-200" />
                       </div>
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="nf-role" className="text-xs font-semibold text-gray-600">Rôle</Label>
-                      <Select>
+                      <Select value={formRole || undefined} onValueChange={(v) => setFormRole(v as Role)}>
                         <SelectTrigger id="nf-role" className="h-9 bg-gray-50 border-gray-200">
                           <SelectValue placeholder="Sélectionner un rôle…" />
                         </SelectTrigger>
@@ -507,7 +559,7 @@ export function UtilisateursConfigClient({
                       <Label htmlFor="nf-password" className="text-xs font-semibold text-gray-600">Mot de passe temporaire</Label>
                       <div className="relative">
                         <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                        <Input id="nf-password" type="password" placeholder="Min. 8 caractères" className="h-9 pl-8 bg-gray-50 border-gray-200" />
+                        <Input id="nf-password" type="password" placeholder="Min. 8 caractères" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} className="h-9 pl-8 bg-gray-50 border-gray-200" />
                       </div>
                     </div>
                     <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
@@ -515,19 +567,22 @@ export function UtilisateursConfigClient({
                         <p className="text-sm font-semibold text-gray-800">Compte actif</p>
                         <p className="text-xs text-gray-500">L&apos;utilisateur peut se connecter immédiatement</p>
                       </div>
-                      <Switch id="nf-active" defaultChecked />
+                      <Switch id="nf-active" checked={formActif} onCheckedChange={setFormActif} />
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center justify-end gap-3 border-t bg-gray-50/60 px-6 py-4">
-                <Button variant="ghost" onClick={() => setIsNewUserOpen(false)} className="text-gray-500 hover:text-gray-700">
+                <Button variant="ghost" onClick={() => setIsNewUserOpen(false)} disabled={createPending} className="text-gray-500 hover:text-gray-700">
                   Annuler
                 </Button>
-                <Button className="gap-2 bg-gradient-to-r from-[#cd3b86] to-[#b8307a] hover:from-[#b8307a] hover:to-[#9b2563] text-white px-5"
-                  onClick={() => setIsNewUserOpen(false)}>
-                  <Plus className="h-4 w-4" />
+                <Button
+                  className="gap-2 bg-gradient-to-r from-[#cd3b86] to-[#b8307a] hover:from-[#b8307a] hover:to-[#9b2563] text-white px-5"
+                  disabled={createPending}
+                  onClick={() => void submitNewUser()}
+                >
+                  {createPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   Créer l&apos;utilisateur
                 </Button>
               </div>

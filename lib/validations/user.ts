@@ -52,3 +52,28 @@ export const userUpdateSchema = z.object({
 })
 
 export type UserUpdateValues = z.infer<typeof userUpdateSchema>
+
+const appRoleSchema = z.enum([
+  "Admin",
+  "Manager",
+  "Médecin",
+  "Sage femme",
+  "Front Office",
+  "Caisse",
+  "Pharmacie",
+  "Commis Pharmacie",
+])
+
+export const userCreateSchema = z.object({
+  firstName: z.string().trim().min(1, "Le prénom est obligatoire."),
+  lastName: z.string().trim().min(1, "Le nom est obligatoire."),
+  titre: z.string().optional(),
+  specialite: z.string().optional(),
+  numeroOrdre: z.string().optional(),
+  email: z.string().trim().email("Email invalide."),
+  role: appRoleSchema,
+  password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères."),
+  actif: z.boolean(),
+})
+
+export type UserCreateValues = z.infer<typeof userCreateSchema>

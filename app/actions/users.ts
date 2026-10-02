@@ -6,16 +6,19 @@ import { prisma } from "@/lib/prisma"
 import { hash } from "bcrypt"
 import { requireUserId } from "@/lib/auth/session"
 import { requirePermission } from "@/lib/permissions-guard"
+import { insertWithNextId } from "@/lib/db/sync-pg-serial"
 import {
   isCaisseLegacyRole,
   isMedecinTitre,
   isPharmacieLegacyRole,
   mapLegacyRoleStringToAppRole,
   mapLegacyRoleStringToAppRoles,
+  serializeAppRolesToLegacy,
   serializeLegacyRoleTokens,
 } from "@/lib/user-role"
-import { userUpdateSchema } from "@/lib/validations/user"
+import { userCreateSchema, userUpdateSchema } from "@/lib/validations/user"
 import type { Role } from "@/lib/types"
+import { ZodError } from "zod"
 
 export type UserConfigRow = {
   id: string
@@ -182,6 +185,57 @@ export async function updateUser(
   revalidatePath(`/configuration/utilisateurs/${id}/edit`)
   revalidatePath("/caisse/ouverture")
   return toRow(updated)
+}
+
+/** Crée un compte utilisateur. */
+export async function createUser(
+  data: unknown,
+): Promise<{ ok: true; user: UserConfigRow } | { ok: false; error: string }> {
+  try {
+    await requirePermission("configuration", "create")
+    const parsed = userCreateSchema.parse(data)
+    const medecin = isMedecinTitre(parsed.titre)
+    const now = new Date()
+    const password = await hash(parsed.password, 10)
+    const created = await insertWithNextId("users", (id) =>
+      prisma.user.create({
+        data: {
+          id,
+          name: `${parsed.firstName} ${parsed.lastName}`.replace(/\s+/g, " ").trim(),
+          email: parsed.email.trim().toLowerCase(),
+          password,
+          titre: parsed.titre?.trim() || null,
+          specialite: medecin ? parsed.specialite?.trim() || null : null,
+          numeroOrdre: medecin ? parsed.numeroOrdre?.trim() || null : null,
+          role: serializeAppRolesToLegacy([parsed.role]),
+          actif: parsed.actif,
+          createdAt: now,
+          updatedAt: now,
+        },
+        include: userInclude,
+      }),
+    )
+    revalidatePath("/configuration/utilisateurs")
+    return { ok: true, user: toRow(created) }
+  } catch (e) {
+    if (e instanceof ZodError) {
+      return { ok: false, error: e.issues[0]?.message ?? "Données invalides." }
+    }
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      const target = e.meta?.target
+      const onEmail = Array.isArray(target)
+        ? target.some((t) => String(t).includes("email"))
+        : typeof target === "string" && target.includes("email")
+      return {
+        ok: false,
+        error: onEmail ? "Cet email est déjà utilisé." : "Impossible de créer le compte. Réessayez.",
+      }
+    }
+    if (e instanceof Error && e.message) {
+      return { ok: false, error: e.message }
+    }
+    return { ok: false, error: "Impossible de créer l'utilisateur." }
+  }
 }
 
 /** Supprime un utilisateur (échoue s’il a des données liées). */
