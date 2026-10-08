@@ -1,4 +1,18 @@
 export type AvoirFeuilleStatut = 'ACTIF' | 'ANNULE'
+export type AvoirFeuilleNature = 'SOLDE' | 'EXONERATION'
+
+export type AvoirFeuilleListRow = {
+  id: string
+  numero: string
+  feuilleId: string
+  feuilleNumero: string
+  patientLabel: string | null
+  nature: AvoirFeuilleNature
+  montant: number
+  motif: string
+  statut: AvoirFeuilleStatut
+  createdAt: string | null
+}
 
 export type AvoirFeuilleSummary = {
   id: string

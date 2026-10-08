@@ -1,6 +1,10 @@
 import React from 'react'
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 import { capitalizeFirstLetter, formatCurrency, formatFactureNumero } from '@/lib/formatting'
+import {
+  montantExonereLigne,
+  montantPatientDuLigne,
+} from '@/lib/feuille-circulation/exoneration'
 import type { EncaissementRecuDetail } from '@/lib/types/caisse'
 
 const styles = StyleSheet.create({
@@ -100,7 +104,10 @@ export function RecuPdfDocument({ recu }: { recu: EncaissementRecuDetail }) {
                 <Text style={styles.colPu}>{formatCurrency(l.valeur)}</Text>
                 <Text style={styles.colTaux}>{l.taux}%</Text>
                 <Text style={styles.colAssurance}>{formatCurrency(l.montantAssurance)}</Text>
-                <Text style={styles.colPatient}>{formatCurrency(l.montantPatient)}</Text>
+                <Text style={styles.colPatient}>
+                  {formatCurrency(montantPatientDuLigne(l))}
+                  {montantExonereLigne(l) > 0 ? '\nRéglée par avoir' : ''}
+                </Text>
               </View>
             ))}
           </View>

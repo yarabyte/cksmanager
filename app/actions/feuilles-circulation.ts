@@ -1065,12 +1065,10 @@ export async function confirmFeuille(id: string): Promise<ActionResult> {
 
     const now = new Date()
     await prisma.$transaction(async (tx) => {
-      let brutPatient = 0
       let waived = 0
       const noms: string[] = []
 
       for (const ligne of feuille.lignes) {
-        brutPatient = roundMoney(brutPatient + num(ligne.montantPatient))
         const flag =
           ligne.typeLigne === 'ACTE' && ligne.acte?.exonerePartPatient === true
         if (ligne.exonerePartPatient !== flag) {
@@ -1108,15 +1106,13 @@ export async function confirmFeuille(id: string): Promise<ActionResult> {
         })
       }
 
-      const reste = roundMoney(Math.max(0, brutPatient - waived))
+      // Reste à 0 compris : la feuille reste impayée pour que la caisse émette
+      // le reçu (même 0 FCFA) et que la facture entre dans le bac.
       await tx.feuilleCirculation.update({
         where: { id: feuille.id },
         data: {
           statut: 'CONFIRMEE',
           confirmedAt: now,
-          ...(waived > 0 && reste <= 0
-            ? { statutPaiement: 'PAYEE', paidAt: now }
-            : {}),
         },
       })
     })
@@ -1124,6 +1120,7 @@ export async function confirmFeuille(id: string): Promise<ActionResult> {
     revalidatePath('/feuilles-circulation')
     revalidatePath(`/feuilles-circulation/${id}`)
     revalidatePath('/caisse')
+    revalidatePath('/facturation/avoirs')
     return { ok: true, id }
   } catch (e) {
     console.error('confirmFeuille error', e)

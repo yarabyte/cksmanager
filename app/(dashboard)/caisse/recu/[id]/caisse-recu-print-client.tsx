@@ -8,6 +8,10 @@ import { ArrowLeft, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { formatCurrency, formatBirthAge, formatFactureNumero } from "@/lib/formatting"
 import { formatCategorieLabel } from "@/components/shared/categorie-icon"
+import {
+  montantExonereLigne,
+  montantPatientDuLigne,
+} from "@/lib/feuille-circulation/exoneration"
 import type { EncaissementRecuDetail } from "@/lib/types/caisse"
 
 export function CaisseRecuPrintClient({
@@ -175,7 +179,10 @@ export function CaisseRecuPrintClient({
                         {formatCurrency(l.montantAssurance)}
                       </td>
                       <td className="py-1 text-right font-medium">
-                        {formatCurrency(l.montantPatient)}
+                        {formatCurrency(montantPatientDuLigne(l))}
+                        {montantExonereLigne(l) > 0 ? (
+                          <span className="block text-[9px] font-semibold">Réglée par avoir</span>
+                        ) : null}
                       </td>
                     </tr>
                   ))}
@@ -187,7 +194,9 @@ export function CaisseRecuPrintClient({
                         Sous-total patient {recu.type === "PRESCRIPTION" ? "prescription" : "feuille de circulation"} {f.numero}
                       </td>
                       <td className="py-1 text-right">
-                        {formatCurrency(f.totaux.totalPatient)}
+                        {formatCurrency(
+                          f.lignes.reduce((s, l) => s + montantPatientDuLigne(l), 0),
+                        )}
                       </td>
                     </tr>
                   </tfoot>

@@ -425,6 +425,7 @@ async function encaisser(
         }
 
         const { montantPatient } = await montantPatientDuFeuille(feuilleId)
+        // 0 FCFA est un reçu valide (part patient entièrement exonérée).
         if (montantPatient < 0) throw new Error('Montant patient invalide.')
 
         await ensureWallet(feuille.visite.patientId, userId)

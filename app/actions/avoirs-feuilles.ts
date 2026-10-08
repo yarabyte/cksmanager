@@ -15,7 +15,7 @@ import {
   annulerAvoirFeuilleSchema,
   createAvoirFeuilleSchema,
 } from '@/lib/validations/avoir-feuille'
-import type { AvoirFeuilleDetail } from '@/lib/types/avoir-feuille'
+import type { AvoirFeuilleDetail, AvoirFeuilleListRow } from '@/lib/types/avoir-feuille'
 import type { Role } from '@/lib/types'
 
 type ActionResult<T = { id: string }> =
@@ -123,6 +123,7 @@ export async function createAvoirFeuille(data: unknown): Promise<ActionResult> {
     revalidatePath('/feuilles-circulation')
     revalidatePath(`/feuilles-circulation/${parsed.feuilleId}`)
     revalidatePath('/caisse')
+    revalidatePath('/facturation/avoirs')
     return { ok: true, id: avoirId.toString() }
   } catch (e) {
     console.error('createAvoirFeuille error', e)
@@ -187,6 +188,7 @@ export async function annulerAvoirFeuille(data: unknown): Promise<ActionResult> 
     revalidatePath('/feuilles-circulation')
     revalidatePath(`/feuilles-circulation/${feuilleId}`)
     revalidatePath('/caisse')
+    revalidatePath('/facturation/avoirs')
     return { ok: true, id: parsed.id }
   } catch (e) {
     console.error('annulerAvoirFeuille error', e)
@@ -195,6 +197,34 @@ export async function annulerAvoirFeuille(data: unknown): Promise<ActionResult> 
       error: e instanceof Error ? e.message : 'Erreur lors de l’annulation de l’avoir.',
     }
   }
+}
+
+export async function listAvoirsFeuilles(): Promise<AvoirFeuilleListRow[]> {
+  await requireUser()
+  const rows = await prisma.avoirFeuilleCirculation.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: {
+      feuille: {
+        select: {
+          numero: true,
+          visite: { select: { patientId: true } },
+        },
+      },
+    },
+  })
+  const labels = await resolvePatientLabels(rows.map((r) => r.feuille.visite.patientId))
+  return rows.map((avoir) => ({
+    id: avoir.id.toString(),
+    numero: avoir.numero,
+    feuilleId: avoir.feuilleId.toString(),
+    feuilleNumero: avoir.feuille.numero,
+    patientLabel: labels.get(avoir.feuille.visite.patientId.toString())?.label ?? null,
+    nature: avoir.nature === 'EXONERATION' ? 'EXONERATION' : 'SOLDE',
+    montant: round2(num(avoir.montant)),
+    motif: avoir.motif,
+    statut: avoir.statut === 'ANNULE' ? 'ANNULE' : 'ACTIF',
+    createdAt: avoir.createdAt ? avoir.createdAt.toISOString() : null,
+  }))
 }
 
 export async function getAvoirById(id: string): Promise<AvoirFeuilleDetail | null> {

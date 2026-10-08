@@ -17,6 +17,11 @@ const TABS = [
       /^\/facturation\/\d+/.test(p),
   },
   {
+    href: "/facturation/avoirs",
+    label: "Avoirs",
+    match: (p: string) => p.startsWith("/facturation/avoirs"),
+  },
+  {
     href: "/facturation/bac",
     label: "Bac à facture",
     match: (p: string) => p.startsWith("/facturation/bac"),

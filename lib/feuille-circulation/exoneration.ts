@@ -16,3 +16,14 @@ export function montantExonereLigne(ligne: {
   const hncTotal = roundMoney(ligne.hnc * ligne.quantite)
   return roundMoney(Math.max(0, ligne.montantPatient - hncTotal))
 }
+
+/** Part patient encore due en caisse (HNC et actes non exonérés). */
+export function montantPatientDuLigne(ligne: {
+  typeLigne?: string
+  exonerePartPatient?: boolean
+  montantPatient: number
+  hnc: number
+  quantite: number
+}): number {
+  return roundMoney(Math.max(0, ligne.montantPatient - montantExonereLigne(ligne)))
+}

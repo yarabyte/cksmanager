@@ -504,6 +504,11 @@ export function CaissePageClient({
                       Recharger le portemonnaie
                     </Button>
                   )}
+                  {context.montantDu === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Reçu à 0 FCFA. La facture sera disponible dans le bac à facture.
+                    </p>
+                  )}
                   <Button
                     className="h-11 gap-2 bg-[#cd3b86] text-white hover:bg-[#b8307a]"
                     disabled={!context.peutEncaisser || pending}

@@ -166,6 +166,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
             },
             { label: "Facturation", href: "/facturation", icon: "Receipt", children: [
               { label: "Factures", href: "/facturation", icon: "Receipt" },
+              { label: "Avoirs", href: "/facturation/avoirs", icon: "Undo2" },
               { label: "Bac à facture", href: "/facturation/bac", icon: "Inbox" },
               { label: "Bordereaux", href: "/facturation/bordereaux", icon: "FileText" },
               { label: "Recouvrement", href: "/facturation/recouvrement", icon: "CreditCard" },
@@ -226,6 +227,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
             },
             { label: "Facturation", href: "/facturation", icon: "Receipt", children: [
               { label: "Factures", href: "/facturation", icon: "Receipt" },
+              { label: "Avoirs", href: "/facturation/avoirs", icon: "Undo2" },
               { label: "Bac à facture", href: "/facturation/bac", icon: "Inbox" },
               { label: "Bordereaux", href: "/facturation/bordereaux", icon: "FileText" },
               { label: "Recouvrement", href: "/facturation/recouvrement", icon: "CreditCard" },
@@ -324,6 +326,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
             caisseNavItem,
             { label: "Factures", href: "/facturation", icon: "Receipt", children: [
               { label: "Factures", href: "/facturation", icon: "Receipt" },
+              { label: "Avoirs", href: "/facturation/avoirs", icon: "Undo2" },
               { label: "Bac à facture", href: "/facturation/bac", icon: "Inbox" },
               { label: "Recouvrement", href: "/facturation/recouvrement", icon: "CreditCard" },
               { label: "Payé", href: "/facturation/paye", icon: "ClipboardCheck" },
@@ -510,6 +513,7 @@ export const breadcrumbLabels: Record<string, string> = {
   bordereaux: "Bordereaux assureurs",
   recouvrement: "Recouvrement",
   paye: "Payé",
+  avoirs: "Avoirs",
   pharmacie: "Pharmacie",
   stock: "Stock",
   approvisionnements: "Approvisionnements",
