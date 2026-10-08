@@ -7,11 +7,17 @@ export const dynamic = "force-dynamic"
 
 export default async function AvoirImprimerPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ nature?: string }>
 }) {
   const { id } = await params
-  const avoir = await getAvoirByFeuilleId(id)
+  const { nature } = await searchParams
+  const avoir = await getAvoirByFeuilleId(
+    id,
+    nature === "EXONERATION" ? "EXONERATION" : "SOLDE",
+  )
   if (!avoir) notFound()
   if (avoir.statut !== "ACTIF") {
     redirect(`/feuilles-circulation/${id}`)

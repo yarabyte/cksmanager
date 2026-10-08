@@ -40,6 +40,7 @@ import { KPICard } from "@/components/shared/kpi-card"
 import { CaisseJournalCard } from "@/components/caisse/caisse-journal-card"
 import { CaisseSoldeTheoriqueCard } from "@/components/caisse/caisse-solde-theorique-card"
 import { formatCurrency, formatDate, formatBirthAge } from "@/lib/formatting"
+import { montantExonereLigne } from "@/lib/feuille-circulation/exoneration"
 import {
   encaisserFacture,
   encaisserFeuille,
@@ -451,6 +452,11 @@ export function CaissePageClient({
                           <div key={l.id} className="flex justify-between gap-2">
                             <span className="min-w-0 truncate">
                               {l.typeLigne === "PHARMA" ? l.produitNom : l.acteNom} ×{l.quantite}
+                              {montantExonereLigne(l) > 0 ? (
+                                <span className="ml-1 font-semibold text-blue-700">
+                                  Réglée par avoir
+                                </span>
+                              ) : null}
                             </span>
                             <span className="shrink-0 tabular-nums">
                               {formatCurrency(l.montantPatient)}
@@ -475,6 +481,11 @@ export function CaissePageClient({
                           >
                             <span className="min-w-0 truncate">
                               {l.typeLigne === "PHARMA" ? l.produitNom : l.acteNom} ×{l.quantite}
+                              {montantExonereLigne(l) > 0 ? (
+                                <span className="ml-1 font-semibold text-blue-700">
+                                  Réglée par avoir
+                                </span>
+                              ) : null}
                             </span>
                             <span className="shrink-0 tabular-nums">
                               {formatCurrency(l.montantPatient)}

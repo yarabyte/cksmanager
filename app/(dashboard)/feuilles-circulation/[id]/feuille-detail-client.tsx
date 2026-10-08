@@ -73,6 +73,7 @@ import {
   downloadAvoirFeuillePdf,
 } from "@/app/actions/avoirs-feuilles"
 import type { FeuilleDetail } from "@/lib/types/feuille-circulation"
+import { montantExonereLigne } from "@/lib/feuille-circulation/exoneration"
 
 function StatutBadge({ statut }: { statut: string }) {
   if (statut === "CONFIRMEE") {
@@ -424,6 +425,33 @@ export function FeuilleDetailClient({
                 )}
               </div>
             )}
+            {feuille.avoirExoneration && (
+              <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-blue-900">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-medium">
+                    Avoir {feuille.avoirExoneration.numero} —{" "}
+                    {formatCurrency(feuille.avoirExoneration.montant)}
+                  </p>
+                  <Button asChild size="sm" variant="outline" className="h-7 gap-1.5 bg-white">
+                    <Link
+                      href={`/feuilles-circulation/${feuille.id}/avoir/imprimer?nature=EXONERATION`}
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      Imprimer l&apos;avoir
+                    </Link>
+                  </Button>
+                </div>
+                <p className="mt-1 text-xs text-blue-800/80">{feuille.avoirExoneration.motif}</p>
+                {feuille.avoirExoneration.userName && (
+                  <p className="mt-1 text-[11px] text-blue-700/70">
+                    Créé par {feuille.avoirExoneration.userName}
+                    {feuille.avoirExoneration.createdAt
+                      ? ` · ${format(new Date(feuille.avoirExoneration.createdAt), "d MMM yyyy HH:mm", { locale: fr })}`
+                      : ""}
+                  </p>
+                )}
+              </div>
+            )}
             {feuille.libelle && (
               <p className="mt-1 text-sm text-muted-foreground">{feuille.libelle}</p>
             )}
@@ -541,7 +569,12 @@ export function FeuilleDetailClient({
                       {formatCurrency(l.montantAssurance)}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {formatCurrency(l.montantPatient)}
+                      <div>{formatCurrency(l.montantPatient)}</div>
+                      {montantExonereLigne(l) > 0 && (
+                        <p className="text-[10px] font-semibold text-blue-700">
+                          Réglée par avoir
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">{formatCurrency(l.montantTotal)}</TableCell>
                   </TableRow>
@@ -565,6 +598,17 @@ export function FeuilleDetailClient({
             <p className="text-lg font-bold text-[#cd3b86]">
               {formatCurrency(feuille.totaux.totalPatient)}
             </p>
+            {feuille.avoirExoneration && (
+              <p className="mt-1 text-xs text-blue-700">
+                À encaisser{" "}
+                {formatCurrency(
+                  Math.max(
+                    0,
+                    feuille.totaux.totalPatient - feuille.avoirExoneration.montant,
+                  ),
+                )}
+              </p>
+            )}
           </div>
           <div>
             <p className="text-xs text-gray-400 uppercase tracking-wide">Total</p>

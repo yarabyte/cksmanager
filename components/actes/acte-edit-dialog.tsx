@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Dialog,
   DialogContent,
@@ -22,8 +21,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
+import {
+  acteTypeLabels,
+  acteTypeValues,
+  normalizeActeType,
+  type ActeType,
+} from "@/lib/validations/acte"
 
 export type ActeRowLike = {
   id: string
@@ -34,6 +42,7 @@ export type ActeRowLike = {
   prixHnc?: string | null
   imputeAssurance?: number | null
   typeActe?: string | null
+  exonerePartPatient?: boolean
   categorie: { id: string; nom: string }
   assureur?: { id: string; nom: string } | null
 }
@@ -47,7 +56,8 @@ export type ActeSavePayload = {
   valeurFixe: number | null
   prixHnc: string | null
   imputeAssurance: number | null
-  typeActe: string | null
+  typeActe: ActeType
+  exonerePartPatient: boolean
 }
 
 type ActeEditDialogProps = {
@@ -70,7 +80,8 @@ const emptyForm = {
   valeurFixe: "",
   prixHnc: "",
   imputeAssurance: "",
-  typeActe: "",
+  typeActe: "CKS",
+  exonerePartPatient: false,
 }
 
 export function ActeEditDialog({
@@ -104,7 +115,8 @@ export function ActeEditDialog({
         prixHnc: r.prixHnc ?? "",
         imputeAssurance:
           r.imputeAssurance != null ? String(r.imputeAssurance) : "",
-        typeActe: r.typeActe ?? "",
+        typeActe: normalizeActeType(r.typeActe),
+        exonerePartPatient: r.exonerePartPatient === true,
       })
     }
   }, [open, mode, initialActe, categories])
@@ -133,7 +145,8 @@ export function ActeEditDialog({
         form.imputeAssurance.trim() === ""
           ? null
           : Number.parseInt(form.imputeAssurance, 10),
-      typeActe: form.typeActe.trim() || null,
+      typeActe: normalizeActeType(form.typeActe),
+      exonerePartPatient: form.exonerePartPatient,
     }
     if (payload.valeurFixe != null && Number.isNaN(payload.valeurFixe)) {
       toast.error("Valeur fixe invalide.")
@@ -151,9 +164,9 @@ export function ActeEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(90vh,720px)] flex-col gap-0 p-0 sm:max-w-[540px] rounded-2xl border-gray-100 overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.12)]">
-        <div className="h-1 w-full bg-gradient-to-r from-[#cd3b86] via-[#e06bb0] to-[#cd3b86]/60" />
-        <DialogHeader className="space-y-1 px-6 pt-5 pb-4 bg-gradient-to-b from-pink-50/50 to-white border-b border-gray-100">
+      <DialogContent className="flex max-h-[min(92vh,820px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[540px] rounded-2xl border-gray-100 shadow-[0_8px_40px_rgba(0,0,0,0.12)]">
+        <div className="h-1 w-full shrink-0 bg-gradient-to-r from-[#cd3b86] via-[#e06bb0] to-[#cd3b86]/60" />
+        <DialogHeader className="shrink-0 space-y-1 border-b border-gray-100 bg-gradient-to-b from-pink-50/50 to-white px-6 pt-5 pb-4">
           <DialogTitle className="text-lg font-bold text-[#525252]">
             {mode === "edit" ? "Modifier l'acte" : "Nouvel acte"}
           </DialogTitle>
@@ -161,8 +174,8 @@ export function ActeEditDialog({
             Tarification et rattachement assureur optionnel — aligné sur le référentiel actes.
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="max-h-[min(60vh,520px)] px-6">
-          <div className="space-y-6 py-4">
+        <div className="min-h-0 flex-auto overflow-y-auto overscroll-contain px-6">
+          <div className="space-y-6 py-4 pb-6">
             <section className="space-y-3">
               <h3 className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
                 Informations générales
@@ -227,16 +240,56 @@ export function ActeEditDialog({
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="acte-edit-type">Type d&apos;acte</Label>
-                <Input
-                  id="acte-edit-type"
-                  value={form.typeActe}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, typeActe: e.target.value }))
+                <Label>Type d&apos;acte</Label>
+                <RadioGroup
+                  value={normalizeActeType(form.typeActe)}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, typeActe: v as ActeType }))
                   }
-                  placeholder="Libre (ex. CS, analyse)"
-                />
+                  className="grid grid-cols-2 gap-2"
+                >
+                  {acteTypeValues.map((value) => {
+                    const selected = normalizeActeType(form.typeActe) === value
+                    return (
+                      <label
+                        key={value}
+                        htmlFor={`acte-type-${value}`}
+                        className={cn(
+                          "flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors",
+                          selected
+                            ? "border-[#cd3b86] bg-[#cd3b86]/5 text-[#cd3b86]"
+                            : "border-gray-200 text-gray-700 hover:bg-gray-50",
+                        )}
+                      >
+                        <RadioGroupItem value={value} id={`acte-type-${value}`} />
+                        {acteTypeLabels[value]}
+                      </label>
+                    )
+                  })}
+                </RadioGroup>
               </div>
+              <label
+                htmlFor="acte-exonere"
+                className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 px-3 py-2.5"
+              >
+                <Checkbox
+                  id="acte-exonere"
+                  checked={form.exonerePartPatient}
+                  onCheckedChange={(checked) =>
+                    setForm((f) => ({ ...f, exonerePartPatient: checked === true }))
+                  }
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-800">
+                    Exonéré de la part patient
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Le patient ne paie pas la part hors HNC. Un avoir est créé à la
+                    confirmation de la feuille. Le HNC et la part assurance restent dus.
+                  </span>
+                </span>
+              </label>
             </section>
 
             <Separator />
@@ -309,8 +362,8 @@ export function ActeEditDialog({
               </div>
             </section>
           </div>
-        </ScrollArea>
-        <DialogFooter className="gap-2 border-t border-gray-100 bg-gray-50/50 px-6 py-4 sm:justify-end">
+        </div>
+        <DialogFooter className="shrink-0 gap-2 border-t border-gray-100 bg-gray-50/50 px-6 py-4 sm:justify-end">
           <Button
             variant="outline"
             type="button"

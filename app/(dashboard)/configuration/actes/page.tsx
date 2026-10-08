@@ -100,6 +100,7 @@ import { useAssurancesList } from "@/hooks/use-assurances"
 import { formatCurrency } from "@/lib/formatting"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { acteTypeLabels, acteTypeValues, normalizeActeType } from "@/lib/validations/acte"
 import { ActeEditDialog } from "@/components/actes/acte-edit-dialog"
 import { CategorieIcon } from "@/components/shared/categorie-icon"
 
@@ -112,6 +113,7 @@ type ActeRow = {
   prixHnc?: string | null
   imputeAssurance?: number | null
   typeActe?: string | null
+  exonerePartPatient?: boolean
   categorie: { id: string; nom: string }
   assureur?: { id: string; nom: string } | null
 }
@@ -164,7 +166,7 @@ export default function ActesConfigPage() {
   const [debouncedQ, setDebouncedQ] = React.useState("")
   const [selectedCategory, setSelectedCategory] = React.useState("all")
   const [selectedAssureur, setSelectedAssureur] = React.useState("all")
-  const [typeActeFilter, setTypeActeFilter] = React.useState("")
+  const [typeActeFilter, setTypeActeFilter] = React.useState("all")
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState<number>(20)
 
@@ -184,7 +186,7 @@ export default function ActesConfigPage() {
       q: debouncedQ,
       categorieId: selectedCategory,
       assureurId: selectedAssureur,
-      typeActe: typeActeFilter.trim() || undefined,
+      typeActe: typeActeFilter === "all" ? undefined : typeActeFilter,
       skip,
       take: pageSize,
     }),
@@ -241,20 +243,20 @@ export default function ActesConfigPage() {
     searchQuery !== "" ||
     selectedCategory !== "all" ||
     selectedAssureur !== "all" ||
-    typeActeFilter !== ""
+    typeActeFilter !== "all"
 
   const activeFilterCount = [
     searchQuery !== "",
     selectedCategory !== "all",
     selectedAssureur !== "all",
-    typeActeFilter !== "",
+    typeActeFilter !== "all",
   ].filter(Boolean).length
 
   const clearFilters = () => {
     setSearchQuery("")
     setSelectedCategory("all")
     setSelectedAssureur("all")
-    setTypeActeFilter("")
+    setTypeActeFilter("all")
   }
 
   function openCreateActe() {
@@ -550,16 +552,23 @@ export default function ActesConfigPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5 sm:col-span-2">
+                <div className="space-y-1.5">
                   <Label className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                     Type d&apos;acte
                   </Label>
-                  <Input
-                    placeholder="Ex. consultation, analyse…"
-                    value={typeActeFilter}
-                    onChange={(e) => setTypeActeFilter(e.target.value)}
-                    className="h-10 rounded-lg border-gray-200 bg-white"
-                  />
+                  <Select value={typeActeFilter} onValueChange={setTypeActeFilter}>
+                    <SelectTrigger className="h-10 w-full rounded-lg border-gray-200 bg-white">
+                      <SelectValue placeholder="Tous" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous</SelectItem>
+                      {acteTypeValues.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {acteTypeLabels[value]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               {hasActiveFilters && (
@@ -666,6 +675,9 @@ export default function ActesConfigPage() {
                   <TableHead className="hidden lg:table-cell text-[11px] font-bold text-gray-500 uppercase tracking-wide py-3">
                     Type
                   </TableHead>
+                  <TableHead className="hidden lg:table-cell text-[11px] font-bold text-gray-500 uppercase tracking-wide py-3">
+                    Exonéré
+                  </TableHead>
                   <TableHead className="hidden md:table-cell text-[11px] font-bold text-gray-500 uppercase tracking-wide py-3">
                     Assureur
                   </TableHead>
@@ -677,7 +689,7 @@ export default function ActesConfigPage() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-40 text-center">
+                    <TableCell colSpan={10} className="h-40 text-center">
                       <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#cd3b86]" />
                       <p className="mt-2 text-sm text-gray-500">
                         Chargement des actes…
@@ -686,7 +698,7 @@ export default function ActesConfigPage() {
                   </TableRow>
                 ) : items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="p-0">
+                    <TableCell colSpan={10} className="p-0">
                       <Empty className="min-h-[220px] border-0">
                         <EmptyHeader>
                           <EmptyMedia variant="icon">
@@ -787,7 +799,14 @@ export default function ActesConfigPage() {
                         )}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell align-top text-sm text-gray-600 py-3">
-                        {acte.typeActe ?? (
+                        {acteTypeLabels[normalizeActeType(acte.typeActe)]}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell align-top text-sm py-3">
+                        {acte.exonerePartPatient ? (
+                          <span className="inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-800">
+                            Oui
+                          </span>
+                        ) : (
                           <span className="text-gray-300">—</span>
                         )}
                       </TableCell>

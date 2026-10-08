@@ -84,6 +84,8 @@ model Acte {
   updatedAt       DateTime? @map("updated_at")
   imputeAssurance Int?      @map("impute_assurance") @db.SmallInt
   typeActe        String?   @map("type_acte")
+  /// La part patient hors HNC est couverte par un avoir à la confirmation de la feuille.
+  exonerePartPatient Boolean @default(false) @map("exonere_part_patient")
 
   categorie CategorieActe @relation(fields: [categorieId], references: [id], onDelete: Cascade)
   assureur  Assurance?    @relation(fields: [assureurId], references: [id], onDelete: SetNull)
@@ -976,7 +978,7 @@ model FeuilleCirculation {
   lignes FeuilleCirculationLigne[]
   factureLiens FactureFeuille[]
   encaissements Encaissement[]
-  avoir AvoirFeuilleCirculation?
+  avoirs AvoirFeuilleCirculation[]
 
   @@index([visiteId])
   @@index([statut])
@@ -984,11 +986,14 @@ model FeuilleCirculation {
   @@map("feuilles_circulation")
 }
 
-/// Avoir comptable sur part patient d'une feuille de circulation impayée (annulation de dette, sans wallet).
+/// Avoir comptable sur part patient d'une feuille de circulation (sans wallet).
+/// SOLDE : annulation manuelle du reste dû. EXONERATION : part patient hors HNC d'actes cochés.
 model AvoirFeuilleCirculation {
   id            BigInt    @id @default(autoincrement())
   numero        String    @unique @db.VarChar(50)
-  feuilleId     BigInt    @unique @map("feuille_id")
+  feuilleId     BigInt    @map("feuille_id")
+  /// SOLDE | EXONERATION
+  nature        String    @default("SOLDE") @db.VarChar(20)
   montant       Decimal   @db.Decimal(12, 2)
   motif         String    @db.Text
   /// ACTIF | ANNULE
@@ -1003,6 +1008,7 @@ model AvoirFeuilleCirculation {
   user        User               @relation("AvoirFeuilleCreateur", fields: [userId], references: [id])
   cancelledBy User?              @relation("AvoirFeuilleAnnulateur", fields: [cancelledById], references: [id], onDelete: SetNull)
 
+  @@unique([feuilleId, nature])
   @@index([statut])
   @@map("avoirs_feuilles_circulation")
 }
@@ -1031,6 +1037,8 @@ model FeuilleCirculationLigne {
   montantPatient   Decimal @default(0) @map("montant_patient") @db.Decimal(12, 2)
   /// Snapshot de l'imputation assurance de l'acte (0/1)
   imputeAssurance Int?    @map("impute_assurance") @db.SmallInt
+  /// Snapshot à la confirmation : acte exonéré de la part patient hors HNC.
+  exonerePartPatient Boolean @default(false) @map("exonere_part_patient")
   position   Int     @default(0)
   userId     BigInt  @map("user_id")
   createdAt  DateTime? @default(now()) @map("created_at")

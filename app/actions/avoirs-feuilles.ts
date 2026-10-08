@@ -9,7 +9,7 @@ import {
   num,
   resolvePatientLabels,
   round2,
-  sumFeuilleMontants,
+  montantPatientDuFeuille,
 } from '@/lib/caisse/helpers'
 import {
   annulerAvoirFeuilleSchema,
@@ -49,7 +49,7 @@ export async function createAvoirFeuille(data: unknown): Promise<ActionResult> {
     const feuille = await prisma.feuilleCirculation.findUnique({
       where: { id: feuilleId },
       include: {
-        avoir: true,
+        avoirs: { where: { nature: 'SOLDE' } },
         _count: { select: { lignes: true } },
       },
     })
@@ -60,7 +60,8 @@ export async function createAvoirFeuille(data: unknown): Promise<ActionResult> {
     if (feuille.statutPaiement !== 'IMPAYEE') {
       return { ok: false, error: 'Un avoir n’est possible que sur une feuille impayée.' }
     }
-    if (feuille.avoir?.statut === 'ACTIF') {
+    const avoirSolde = feuille.avoirs[0]
+    if (avoirSolde?.statut === 'ACTIF') {
       return { ok: false, error: 'Un avoir actif existe déjà pour cette feuille.' }
     }
 
@@ -72,7 +73,7 @@ export async function createAvoirFeuille(data: unknown): Promise<ActionResult> {
       }
     }
 
-    const { montantPatient } = await sumFeuilleMontants(feuilleId)
+    const { montantPatient } = await montantPatientDuFeuille(feuilleId)
     if (montantPatient <= 0) {
       return { ok: false, error: 'Aucun montant patient à couvrir par un avoir.' }
     }
@@ -82,9 +83,9 @@ export async function createAvoirFeuille(data: unknown): Promise<ActionResult> {
       const now = new Date()
 
       let id: bigint
-      if (feuille.avoir) {
+      if (avoirSolde) {
         const updated = await tx.avoirFeuilleCirculation.update({
-          where: { id: feuille.avoir.id },
+          where: { id: avoirSolde.id },
           data: {
             numero,
             montant: montantPatient,
@@ -101,6 +102,7 @@ export async function createAvoirFeuille(data: unknown): Promise<ActionResult> {
           data: {
             numero,
             feuilleId,
+            nature: 'SOLDE',
             montant: montantPatient,
             motif: parsed.motif,
             statut: 'ACTIF',
@@ -145,6 +147,12 @@ export async function annulerAvoirFeuille(data: unknown): Promise<ActionResult> 
       where: { id: BigInt(parsed.id) },
     })
     if (!avoir) return { ok: false, error: 'Avoir introuvable.' }
+    if (avoir.nature === 'EXONERATION') {
+      return {
+        ok: false,
+        error: 'Cet avoir d’exonération suit la feuille confirmée et ne peut pas être annulé.',
+      }
+    }
     if (avoir.statut !== 'ACTIF') {
       return { ok: false, error: 'Cet avoir est déjà annulé.' }
     }
@@ -261,9 +269,12 @@ export async function getAvoirById(id: string): Promise<AvoirFeuilleDetail | nul
 
 export async function getAvoirByFeuilleId(
   feuilleId: string,
+  nature: 'SOLDE' | 'EXONERATION' = 'SOLDE',
 ): Promise<AvoirFeuilleDetail | null> {
   const avoir = await prisma.avoirFeuilleCirculation.findUnique({
-    where: { feuilleId: BigInt(feuilleId) },
+    where: {
+      feuilleId_nature: { feuilleId: BigInt(feuilleId), nature },
+    },
     select: { id: true },
   })
   if (!avoir) return null

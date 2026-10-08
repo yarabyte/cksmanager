@@ -14,7 +14,7 @@ import {
   nextRecuNumero,
   resolvePatientLabels,
   round2,
-  sumFeuilleMontants,
+  montantPatientDuFeuille,
   sumPrescriptionMontants,
   writeJournalCaisseEntry,
 } from '@/lib/caisse/helpers'
@@ -150,7 +150,7 @@ async function listFeuillesEnAttente(q?: string): Promise<CaisseEnAttenteItem[]>
 
   const items: CaisseEnAttenteItem[] = []
   for (const f of feuilles) {
-    const { montantPatient, montantAssurance } = await sumFeuilleMontants(f.id)
+    const { montantPatient, montantAssurance } = await montantPatientDuFeuille(f.id)
     const pl = labels.get(f.visite.patientId.toString())
     const medecinNom = f.visite.medecin
       ? `${f.visite.medecin.titre ? f.visite.medecin.titre + ' ' : ''}${f.visite.medecin.name}`
@@ -424,7 +424,7 @@ async function encaisser(
           throw new Error('Feuille de circulation déjà payée.')
         }
 
-        const { montantPatient } = await sumFeuilleMontants(feuilleId)
+        const { montantPatient } = await montantPatientDuFeuille(feuilleId)
         if (montantPatient < 0) throw new Error('Montant patient invalide.')
 
         await ensureWallet(feuille.visite.patientId, userId)

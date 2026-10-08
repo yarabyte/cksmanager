@@ -3,6 +3,9 @@
 import { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
+import { requireUser } from '@/lib/auth/session'
+import { nextAvoirNumero } from '@/lib/caisse/helpers'
+import { montantExonereLigne, roundMoney } from '@/lib/feuille-circulation/exoneration'
 import { formatPatientIdentityLine } from '@/lib/formatting'
 import {
   endOfDayDouala,
@@ -386,6 +389,7 @@ function ligneToRow(l: {
   montantAssurance: Prisma.Decimal
   montantPatient: Prisma.Decimal
   imputeAssurance: number | null
+  exonerePartPatient: boolean
   position: number
 }): FeuilleLigneRow {
   return {
@@ -408,6 +412,7 @@ function ligneToRow(l: {
     montantAssurance: num(l.montantAssurance),
     montantPatient: num(l.montantPatient),
     imputeAssurance: l.imputeAssurance,
+    exonerePartPatient: l.exonerePartPatient,
     position: l.position,
   }
 }
@@ -459,7 +464,7 @@ export async function getFeuilleById(id: string): Promise<FeuilleDetail | null> 
           produit: { select: { nom: true, dosage: true } },
         },
       },
-      avoir: {
+      avoirs: {
         include: {
           user: { select: { name: true } },
         },
@@ -475,18 +480,10 @@ export async function getFeuilleById(id: string): Promise<FeuilleDetail | null> 
     ? `${medecin.titre ? medecin.titre + ' ' : ''}${medecin.name}`
     : null
 
-  const avoir =
-    f.avoir && f.avoir.statut === 'ACTIF'
-      ? {
-          id: f.avoir.id.toString(),
-          numero: f.avoir.numero,
-          montant: Number(f.avoir.montant),
-          motif: f.avoir.motif,
-          statut: 'ACTIF' as const,
-          createdAt: f.avoir.createdAt ? f.avoir.createdAt.toISOString() : null,
-          userName: f.avoir.user?.name ?? null,
-        }
-      : null
+  const solde = f.avoirs.find((a) => a.nature === 'SOLDE')
+  const exoneration = f.avoirs.find((a) => a.nature === 'EXONERATION')
+  const avoir = serializeFeuilleAvoir(solde, true)
+  const avoirExoneration = serializeFeuilleAvoir(exoneration, true)
 
   const hosp = f.visite.hospitalisation
 
@@ -520,7 +517,35 @@ export async function getFeuilleById(id: string): Promise<FeuilleDetail | null> 
     lignes,
     totaux: computeTotaux(lignes),
     avoir,
-    hasAvoirAnnule: f.avoir?.statut === 'ANNULE',
+    avoirExoneration,
+    hasAvoirAnnule: solde?.statut === 'ANNULE',
+  }
+}
+
+function serializeFeuilleAvoir(
+  avoir:
+    | {
+        id: bigint
+        numero: string
+        montant: Prisma.Decimal
+        motif: string
+        statut: string
+        createdAt: Date | null
+        user: { name: string } | null
+      }
+    | undefined,
+  actifOnly: boolean,
+) {
+  if (!avoir) return null
+  if (actifOnly && avoir.statut !== 'ACTIF') return null
+  return {
+    id: avoir.id.toString(),
+    numero: avoir.numero,
+    montant: Number(avoir.montant),
+    motif: avoir.motif,
+    statut: avoir.statut as 'ACTIF' | 'ANNULE',
+    createdAt: avoir.createdAt ? avoir.createdAt.toISOString() : null,
+    userName: avoir.user?.name ?? null,
   }
 }
 
@@ -1021,25 +1046,84 @@ export async function updateFeuille(data: unknown): Promise<ActionResult> {
 
 export async function confirmFeuille(id: string): Promise<ActionResult> {
   try {
+    const user = await requireUser()
     const feuille = await prisma.feuilleCirculation.findUnique({
       where: { id: BigInt(id) },
-      include: { _count: { select: { lignes: true } } },
+      include: {
+        lignes: {
+          include: { acte: { select: { nom: true, exonerePartPatient: true } } },
+        },
+      },
     })
     if (!feuille) return { ok: false, error: 'Feuille de circulation introuvable.' }
     if (feuille.statut === 'CONFIRMEE') {
       return { ok: false, error: 'La feuille de circulation est déjà confirmée.' }
     }
-    if (feuille._count.lignes === 0) {
+    if (feuille.lignes.length === 0) {
       return { ok: false, error: 'Impossible de confirmer une feuille de circulation sans ligne.' }
     }
 
-    await prisma.feuilleCirculation.update({
-      where: { id: BigInt(id) },
-      data: { statut: 'CONFIRMEE', confirmedAt: new Date() },
+    const now = new Date()
+    await prisma.$transaction(async (tx) => {
+      let brutPatient = 0
+      let waived = 0
+      const noms: string[] = []
+
+      for (const ligne of feuille.lignes) {
+        brutPatient = roundMoney(brutPatient + num(ligne.montantPatient))
+        const flag =
+          ligne.typeLigne === 'ACTE' && ligne.acte?.exonerePartPatient === true
+        if (ligne.exonerePartPatient !== flag) {
+          await tx.feuilleCirculationLigne.update({
+            where: { id: ligne.id },
+            data: { exonerePartPatient: flag },
+          })
+        }
+        const part = montantExonereLigne({
+          typeLigne: ligne.typeLigne,
+          exonerePartPatient: flag,
+          montantPatient: num(ligne.montantPatient),
+          hnc: num(ligne.hnc),
+          quantite: ligne.quantite,
+        })
+        if (part > 0) {
+          waived = roundMoney(waived + part)
+          noms.push(ligne.acte?.nom?.replace(/\s+/g, ' ').trim() || 'Acte')
+        }
+      }
+
+      if (waived > 0) {
+        const numero = await nextAvoirNumero(tx)
+        const motif = `Exonération de la part patient — ${noms.join(', ')}`
+        await tx.avoirFeuilleCirculation.create({
+          data: {
+            numero,
+            feuilleId: feuille.id,
+            nature: 'EXONERATION',
+            montant: waived,
+            motif,
+            statut: 'ACTIF',
+            userId: user.id,
+          },
+        })
+      }
+
+      const reste = roundMoney(Math.max(0, brutPatient - waived))
+      await tx.feuilleCirculation.update({
+        where: { id: feuille.id },
+        data: {
+          statut: 'CONFIRMEE',
+          confirmedAt: now,
+          ...(waived > 0 && reste <= 0
+            ? { statutPaiement: 'PAYEE', paidAt: now }
+            : {}),
+        },
+      })
     })
 
     revalidatePath('/feuilles-circulation')
     revalidatePath(`/feuilles-circulation/${id}`)
+    revalidatePath('/caisse')
     return { ok: true, id }
   } catch (e) {
     console.error('confirmFeuille error', e)

@@ -24,6 +24,8 @@ export type FeuilleLigneRow = {
   montantAssurance: number
   montantPatient: number
   imputeAssurance: number | null
+  /** Snapshot confirmation : part patient hors HNC couverte par un avoir. */
+  exonerePartPatient: boolean
   position: number
 }
 
@@ -82,18 +84,22 @@ export type FeuilleDetail = {
   } | null
   lignes: FeuilleLigneRow[]
   totaux: FeuilleTotaux
-  /** Avoir ACTIF lié, si présent. */
-  avoir: {
-    id: string
-    numero: string
-    montant: number
-    motif: string
-    statut: 'ACTIF' | 'ANNULE'
-    createdAt: string | null
-    userName: string | null
-  } | null
-  /** True si un avoir ANNULE existe (pas de nouvel avoir tant que unique feuilleId). */
+  /** Avoir manuel SOLDE actif, si présent. */
+  avoir: FeuilleAvoir | null
+  /** Avoir automatique d'exonération de la part patient hors HNC. */
+  avoirExoneration: FeuilleAvoir | null
+  /** True si un avoir SOLDE ANNULE existe. */
   hasAvoirAnnule?: boolean
+}
+
+export type FeuilleAvoir = {
+  id: string
+  numero: string
+  montant: number
+  motif: string
+  statut: 'ACTIF' | 'ANNULE'
+  createdAt: string | null
+  userName: string | null
 }
 
 export type FeuilleStats = {

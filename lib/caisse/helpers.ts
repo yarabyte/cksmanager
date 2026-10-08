@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { formatPatientIdentityLine } from '@/lib/formatting'
 import type { FeuilleLigneRow, FeuilleTotaux } from '@/lib/types/feuille-circulation'
+import { roundMoney } from '@/lib/feuille-circulation/exoneration'
 
 export const SYSTEM_USER_ID = BigInt(1)
 
@@ -104,6 +105,7 @@ export function ligneToRow(l: {
   montantAssurance: Prisma.Decimal
   montantPatient: Prisma.Decimal
   imputeAssurance: number | null
+  exonerePartPatient: boolean
   position: number
 }): FeuilleLigneRow {
   return {
@@ -126,6 +128,7 @@ export function ligneToRow(l: {
     montantAssurance: num(l.montantAssurance),
     montantPatient: num(l.montantPatient),
     imputeAssurance: l.imputeAssurance,
+    exonerePartPatient: l.exonerePartPatient,
     position: l.position,
   }
 }
@@ -144,6 +147,28 @@ export async function sumFeuilleMontants(feuilleId: bigint) {
   return {
     montantPatient: round2(num(agg._sum.montantPatient)),
     montantAssurance: round2(num(agg._sum.montantAssurance)),
+  }
+}
+
+/** Montant de l'avoir d'exonération encore actif (0 sinon). */
+export async function exonerationAvoirMontant(feuilleId: bigint): Promise<number> {
+  const row = await prisma.avoirFeuilleCirculation.findUnique({
+    where: { feuilleId_nature: { feuilleId, nature: 'EXONERATION' } },
+    select: { montant: true, statut: true },
+  })
+  if (!row || row.statut !== 'ACTIF') return 0
+  return round2(num(row.montant))
+}
+
+/** Part patient encore due en caisse / facture : brut moins avoir d'exonération. */
+export async function montantPatientDuFeuille(feuilleId: bigint) {
+  const sums = await sumFeuilleMontants(feuilleId)
+  const montantExonere = await exonerationAvoirMontant(feuilleId)
+  return {
+    montantPatient: roundMoney(Math.max(0, sums.montantPatient - montantExonere)),
+    montantAssurance: sums.montantAssurance,
+    montantExonere,
+    montantPatientBrut: sums.montantPatient,
   }
 }
 
@@ -197,6 +222,7 @@ export async function loadPrescriptionLignes(prescriptionId: bigint) {
     montantAssurance: num(l.montantAssurance),
     montantPatient: num(l.montantPatient),
     imputeAssurance: null,
+    exonerePartPatient: false,
     position: l.position,
   }))
   return { lignes, totaux: computeTotauxFromLignes(lignes) }

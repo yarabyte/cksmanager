@@ -12,7 +12,7 @@ import {
   nextFactureNumero,
   resolvePatientLabels,
   round2,
-  sumFeuilleMontants,
+  montantPatientDuFeuille,
 } from '@/lib/caisse/helpers'
 import { isNonAssureAssuranceName } from '@/lib/assurance/non-assure'
 import { loadFactureHistoriquePaiements } from '@/lib/facture/payment-history'
@@ -79,7 +79,7 @@ export async function listVisitesAvecFeuillesEligibles(): Promise<VisiteFeuilles
     const v = list[0].visite
     const feuilleRows: FeuilleEligibleFacture[] = []
     for (const f of list) {
-      const m = await sumFeuilleMontants(f.id)
+      const m = await montantPatientDuFeuille(f.id)
       feuilleRows.push({
         id: f.id.toString(),
         numero: f.numero,
@@ -475,7 +475,7 @@ export async function createFacture(
         )
       }
 
-      const m = await sumFeuilleMontants(fid)
+      const m = await montantPatientDuFeuille(fid)
       if (feuille.statutPaiement !== 'PAYEE') {
         montantPatient += m.montantPatient
       }

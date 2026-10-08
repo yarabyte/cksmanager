@@ -38,6 +38,7 @@ import {
   type ActeRowLike,
   type ActeSavePayload,
 } from "@/components/actes/acte-edit-dialog"
+import { acteTypeLabels, normalizeActeType } from "@/lib/validations/acte"
 
 const cardSurface =
   "rounded-2xl border border-gray-100 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06)] transition-all duration-200 ease-in-out"
@@ -234,9 +235,12 @@ export default function ActeDetailPage() {
                 <span className="inline-flex text-xs font-semibold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">
                   {acte.categorie.nom}
                 </span>
-                {acte.typeActe ? (
-                  <Badge variant="outline" className="text-xs font-medium border-gray-200 rounded-full">
-                    {acte.typeActe}
+                <Badge variant="outline" className="text-xs font-medium border-gray-200 rounded-full">
+                  {acteTypeLabels[normalizeActeType(acte.typeActe)]}
+                </Badge>
+                {acte.exonerePartPatient ? (
+                  <Badge variant="outline" className="text-xs font-medium border-blue-200 text-blue-800 rounded-full">
+                    Exonéré de la part patient
                   </Badge>
                 ) : null}
               </div>

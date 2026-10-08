@@ -3,8 +3,27 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { toSerializable } from '@/lib/json-bigint'
-import { acteCreateSchema, acteUpdateSchema } from '@/lib/validations/acte'
+import { acteCreateSchema, acteUpdateSchema, normalizeActeType } from '@/lib/validations/acte'
 import { Decimal } from '@prisma/client/runtime/library'
+
+function typeActeWhere(typeActe?: string): Prisma.ActeWhereInput {
+  if (!typeActe || typeActe === 'all') return {}
+  if (normalizeActeType(typeActe) === 'PLENITUDE') {
+    return {
+      OR: [
+        { typeActe: { equals: 'plenitude', mode: 'insensitive' } },
+        { typeActe: { equals: 'plénitude', mode: 'insensitive' } },
+      ],
+    }
+  }
+  return {
+    OR: [
+      { typeActe: { equals: 'cks', mode: 'insensitive' } },
+      { typeActe: null },
+      { typeActe: '' },
+    ],
+  }
+}
 
 export async function listActes(params: {
   q?: string
@@ -30,9 +49,7 @@ export async function listActes(params: {
         ? { assureurId: null }
         : { assureurId: BigInt(params.assureurId) }
       : {}),
-    ...(params.typeActe && params.typeActe !== 'all'
-      ? { typeActe: params.typeActe }
-      : {}),
+    ...typeActeWhere(params.typeActe),
   }
 
   const [items, total] = await Promise.all([
@@ -69,7 +86,8 @@ export async function createActe(data: unknown) {
       prixHnc:
         v.prixHnc && v.prixHnc.length > 0 ? new Decimal(v.prixHnc) : null,
       imputeAssurance: v.imputeAssurance ?? null,
-      typeActe: v.typeActe ?? null,
+      typeActe: v.typeActe,
+      exonerePartPatient: v.exonerePartPatient,
     },
   })
   return toSerializable(row)
@@ -89,7 +107,8 @@ export async function updateActe(data: unknown) {
       prixHnc:
         v.prixHnc && v.prixHnc.length > 0 ? new Decimal(v.prixHnc) : null,
       imputeAssurance: v.imputeAssurance ?? null,
-      typeActe: v.typeActe ?? null,
+      typeActe: v.typeActe,
+      exonerePartPatient: v.exonerePartPatient,
     },
   })
   return toSerializable(row)
