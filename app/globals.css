@@ -308,6 +308,29 @@
     page: recu-landscape;
   }
 
+  /* Reçu caisse : papier listing continu (imprimante matricielle).
+     absolute plutôt que fixed pour que les longs reçus continuent sur la feuille suivante. */
+  #print-document.print-recu-listing {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    page: recu-listing;
+  }
+
+  #print-document.print-recu-listing,
+  #print-document.print-recu-listing * {
+    font-family: "Courier New", Courier, monospace !important;
+    font-weight: 700 !important;
+    color: #000 !important;
+    border-color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   #print-document.print-journal-landscape {
     position: fixed;
     top: 0;
@@ -330,6 +353,12 @@
   margin: 10mm;
 }
 
+/* Papier listing 9,5 x 11 pouces */
+@page recu-listing {
+  size: 241mm 279mm;
+  margin: 6mm 8mm;
+}
+
 @page journal-landscape {
   size: A4 landscape;
   margin: 10mm;
@@ -344,4 +373,11 @@
 /* Aperçu écran reçu A4 paysage */
 .print-recu-landscape {
   min-height: 210mm;
+}
+
+/* Aperçu écran reçu papier listing */
+.print-recu-listing {
+  font-family: "Courier New", Courier, monospace;
+  font-weight: 700;
+  color: #000;
 }
