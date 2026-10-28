@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { uploadsRootDir } from '@/lib/uploads'
 
 const ALLOWED_TYPES = new Set([
   'image/png',
@@ -17,7 +18,7 @@ function extForMime(mime: string): string {
   return 'svg'
 }
 
-/** Téléversement du logo clinique vers /public/uploads/logos (servi en statique). */
+/** Téléversement du logo clinique, servi sous /uploads/logos par app/uploads/[...path]/route.ts. */
 export async function POST(req: Request) {
   try {
     const formData = await req.formData()
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
     }
     const ext = extForMime(file.type)
     const filename = `${randomUUID()}.${ext}`
-    const dir = path.join(process.cwd(), 'public', 'uploads', 'logos')
+    const dir = path.join(uploadsRootDir(), 'logos')
     await mkdir(dir, { recursive: true })
     const buf = Buffer.from(await file.arrayBuffer())
     await writeFile(path.join(dir, filename), buf)
