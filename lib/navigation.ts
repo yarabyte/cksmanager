@@ -3,7 +3,9 @@ import { hasPermissionWithMatrixAny } from "./permissions"
 import { ALL_ROLES } from "./permissions-matrix"
 import type { PermissionMatrix } from "./permissions-matrix"
 import {
+  isBordereauPath,
   moduleForPathname,
+  rolesAlwaysCanManageBordereaux,
   rolesAlwaysCanViewBac,
   rolesAlwaysCanViewPatients,
 } from "./permissions-access"
@@ -400,6 +402,7 @@ export function filterNavGroupsByPermissions(
     ) {
       return true
     }
+    if (isBordereauPath(item.href) && rolesAlwaysCanManageBordereaux(roles)) return true
     const module = item.module ?? moduleForPathname(item.href)
     if (!module) return true
     return hasPermissionWithMatrixAny(matrix, roles, module, "view")

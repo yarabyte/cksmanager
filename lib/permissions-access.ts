@@ -88,6 +88,18 @@ export function rolesAlwaysCanViewBac(roles: Role[] | null | undefined): boolean
   return (roles ?? []).some((r) => ROLES_ALWAYS_VIEW_BAC.includes(r))
 }
 
+/** Admin et Manager gèrent les bordereaux, même si le module assurances est vide en base. */
+const ROLES_ALWAYS_MANAGE_BORDEREAUX: readonly Role[] = ["Admin", "Manager"]
+
+export function isBordereauPath(pathname: string): boolean {
+  const path = pathname.split("?")[0] ?? pathname
+  return path === "/facturation/bordereaux" || path.startsWith("/facturation/bordereaux/")
+}
+
+export function rolesAlwaysCanManageBordereaux(roles: Role[] | null | undefined): boolean {
+  return (roles ?? []).some((r) => ROLES_ALWAYS_MANAGE_BORDEREAUX.includes(r))
+}
+
 function userAlwaysCanViewBac(user: Pick<AuthUser, "roles" | "customGroup">): boolean {
   if (rolesAlwaysCanViewBac(user.roles)) return true
   return Boolean(user.customGroup && customGroupLooksLikeFrontOffice(user.customGroup))
@@ -170,6 +182,7 @@ export function canViewPathname(
     return false
   }
   if (isBacFacturePath(path) && userAlwaysCanViewBac(user)) return true
+  if (isBordereauPath(path) && rolesAlwaysCanManageBordereaux(user.roles)) return true
   const module = moduleForPathname(path)
   if (module === "patients" && userAlwaysHasPatientAction(user, "view")) return true
   if (user.customGroup) {

@@ -4,7 +4,9 @@ import type { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { toSerializable } from '@/lib/json-bigint'
+import { requireUser } from '@/lib/auth/session'
 import { requirePermission } from '@/lib/permissions-guard'
+import { rolesAlwaysCanManageBordereaux } from '@/lib/permissions-access'
 import { isNonAssureAssuranceName } from '@/lib/assurance/non-assure'
 import { notifyEventAsync } from '@/lib/notifications/create-notification'
 import {
@@ -33,6 +35,8 @@ import type {
 } from '@/lib/types/bordereau'
 
 async function requireBordereauManager() {
+  const user = await requireUser()
+  if (rolesAlwaysCanManageBordereaux(user.roles)) return user
   return requirePermission('assurances', 'view')
 }
 
