@@ -206,8 +206,11 @@ export function BordereauPrintClient({
                 <tr>
                   <th>N° facture</th>
                   <th>Patient</th>
+                  <th>N° attestation</th>
                   <th>Date visite</th>
-                  <th className="bp-right">Part assurance</th>
+                  <th className="bp-right">Part patient</th>
+                  <th className="bp-right">Part assureur</th>
+                  <th className="bp-right">Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -215,8 +218,13 @@ export function BordereauPrintClient({
                   <tr key={f.factureId}>
                     <td>{formatFactureNumero(f.factureNumero)}</td>
                     <td>{f.patientLabel ?? `#${f.patientId}`}</td>
+                    <td>{f.numeroAttestation || "—"}</td>
                     <td>{formatDateFr(f.dateVisite)}</td>
+                    <td className="bp-right">{formatCurrency(f.montantPatient)}</td>
                     <td className="bp-right">{formatCurrency(f.montantAssurance)}</td>
+                    <td className="bp-right">
+                      {formatCurrency(f.montantPatient + f.montantAssurance)}
+                    </td>
                   </tr>
                 ))}
               </tbody>

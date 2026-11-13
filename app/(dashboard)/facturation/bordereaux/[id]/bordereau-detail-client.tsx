@@ -553,9 +553,12 @@ export function BordereauDetailClient({
                   </TableHead>
                   <TableHead>N° facture</TableHead>
                   <TableHead>Patient</TableHead>
+                  <TableHead>N° attestation</TableHead>
                   <TableHead>Visite</TableHead>
                   <TableHead>Statut assureur</TableHead>
-                  <TableHead className="text-right pr-4">Part assurance</TableHead>
+                  <TableHead className="text-right">Part patient</TableHead>
+                  <TableHead className="text-right">Part assureur</TableHead>
+                  <TableHead className="text-right pr-4">Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -588,6 +591,9 @@ export function BordereauDetailClient({
                     <TableCell className="text-sm">
                       {f.patientLabel ?? `Patient #${f.patientId}`}
                     </TableCell>
+                    <TableCell className="text-sm text-gray-600 tabular-nums">
+                      {f.numeroAttestation || "—"}
+                    </TableCell>
                     <TableCell className="text-sm text-gray-500">
                       {f.dateVisite ? formatDate(f.dateVisite) : "—"}
                     </TableCell>
@@ -605,8 +611,14 @@ export function BordereauDetailClient({
                         </p>
                       ) : null}
                     </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums pr-4">
+                    <TableCell className="text-right tabular-nums">
+                      {formatCurrency(f.montantPatient)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
                       {formatCurrency(f.montantAssurance)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums pr-4">
+                      {formatCurrency(f.montantPatient + f.montantAssurance)}
                     </TableCell>
                   </TableRow>
                 ))}

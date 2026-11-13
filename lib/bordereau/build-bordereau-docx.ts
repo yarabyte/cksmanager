@@ -193,17 +193,30 @@ export async function buildBordereauDocxBlob(
     headerRows.push(labelValue('Paiement : ', pay))
   }
 
-  const colW = [1800, 4200, 2200, 2200] as const
+  const colW = [1400, 2200, 1600, 1500, 1400, 1400, 1400] as const
 
   const tableRows = [
     new TableRow({
       children: [
         cell('N° facture', { bold: true, width: colW[0], shade: 'F9FAFB' }),
         cell('Patient', { bold: true, width: colW[1], shade: 'F9FAFB' }),
-        cell('Date visite', { bold: true, width: colW[2], shade: 'F9FAFB' }),
-        cell('Part assurance', {
+        cell('N° attestation', { bold: true, width: colW[2], shade: 'F9FAFB' }),
+        cell('Date visite', { bold: true, width: colW[3], shade: 'F9FAFB' }),
+        cell('Part patient', {
           bold: true,
-          width: colW[3],
+          width: colW[4],
+          shade: 'F9FAFB',
+          align: AlignmentType.RIGHT,
+        }),
+        cell('Part assureur', {
+          bold: true,
+          width: colW[5],
+          shade: 'F9FAFB',
+          align: AlignmentType.RIGHT,
+        }),
+        cell('Total', {
+          bold: true,
+          width: colW[6],
           shade: 'F9FAFB',
           align: AlignmentType.RIGHT,
         }),
@@ -215,9 +228,18 @@ export async function buildBordereauDocxBlob(
           children: [
             cell(formatFactureNumero(f.factureNumero), { width: colW[0] }),
             cell(f.patientLabel ?? `#${f.patientId}`, { width: colW[1] }),
-            cell(formatDateFr(f.dateVisite), { width: colW[2] }),
+            cell(f.numeroAttestation || '—', { width: colW[2] }),
+            cell(formatDateFr(f.dateVisite), { width: colW[3] }),
+            cell(formatCurrency(f.montantPatient), {
+              width: colW[4],
+              align: AlignmentType.RIGHT,
+            }),
             cell(formatCurrency(f.montantAssurance), {
-              width: colW[3],
+              width: colW[5],
+              align: AlignmentType.RIGHT,
+            }),
+            cell(formatCurrency(f.montantPatient + f.montantAssurance), {
+              width: colW[6],
               align: AlignmentType.RIGHT,
             }),
           ],
@@ -231,7 +253,7 @@ export async function buildBordereauDocxBlob(
   ]
 
   const table = new Table({
-    width: { size: 10400, type: WidthType.DXA },
+    width: { size: 10900, type: WidthType.DXA },
     columnWidths: [...colW],
     rows: tableRows,
   })

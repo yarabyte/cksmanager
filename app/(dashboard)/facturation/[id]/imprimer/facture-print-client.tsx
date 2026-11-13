@@ -10,10 +10,6 @@ import { Button } from "@/components/ui/button"
 import { formatCurrency, formatBirthAge, formatFactureNumero } from "@/lib/formatting"
 import { encaissementTypeLabel } from "@/lib/facture/encaissement-labels"
 import { formatCategorieLabel } from "@/components/shared/categorie-icon"
-import {
-  montantExonereLigne,
-  montantPatientDuLigne,
-} from "@/lib/feuille-circulation/exoneration"
 import type { FactureFeuilleResume, FacturePrintData } from "@/lib/types/facture"
 import type { FeuilleLigneRow } from "@/lib/types/feuille-circulation"
 import { FACTURE_PDF_PAGE_WIDTH_MM, FACTURE_PDF_STYLES } from "./facture-pdf-styles"
@@ -182,7 +178,7 @@ function FeuilleLignesTable({
         <tbody>
           {lignes.map((l) => {
             const ligneTotal =
-              montantPatientDuLigne(l) + (l.montantAssurance ?? 0)
+              (l.montantPatient ?? 0) + (l.montantAssurance ?? 0)
             return (
               <tr key={l.id}>
                 <td className="fp-col-designation">
@@ -198,10 +194,7 @@ function FeuilleLignesTable({
                       : "fp-right"
                   }
                 >
-                  {formatCurrency(montantPatientDuLigne(l))}
-                  {montantExonereLigne(l) > 0 ? (
-                    <span className="fp-muted"> · réglée par avoir</span>
-                  ) : null}
+                  {formatCurrency(l.montantPatient)}
                 </td>
                 <td
                   className={
@@ -290,7 +283,7 @@ function FacturePage({
   const titre = variant === "patient" ? "Facture patient" : "Facture assureur"
   const partPatientDue = facture.feuilles.reduce(
     (sum, f) =>
-      sum + f.lignes.reduce((s, l) => s + montantPatientDuLigne(l), 0),
+      sum + f.lignes.reduce((s, l) => s + (l.montantPatient ?? 0), 0),
     0,
   )
   const totalGeneral = partPatientDue + facture.montantAssurance

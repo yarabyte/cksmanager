@@ -39,7 +39,10 @@ export type BordereauFactureRow = {
   factureNumero: string
   patientId: string
   patientLabel: string | null
+  /** N° attestation / matricule assureur (AssurancePatient). */
+  numeroAttestation: string | null
   dateVisite: string | null
+  montantPatient: number
   montantAssurance: number
   statutFacture: string
   /** Suivi assureur de cette ligne */

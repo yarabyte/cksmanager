@@ -150,6 +150,8 @@ export async function getBordereauById(id: string): Promise<BordereauDetail | nu
               numero: true,
               patientId: true,
               statut: true,
+              montantPatient: true,
+              montantAssurance: true,
               visite: { select: { dateVisite: true } },
             },
           },
@@ -159,7 +161,25 @@ export async function getBordereauById(id: string): Promise<BordereauDetail | nu
   })
   if (!b) return null
 
-  const labels = await resolvePatientLabels(b.factures.map((l) => l.facture.patientId))
+  const patientIds = b.factures.map((l) => l.facture.patientId)
+  const [labels, affiliations] = await Promise.all([
+    resolvePatientLabels(patientIds),
+    patientIds.length
+      ? prisma.assurancePatient.findMany({
+          where: {
+            assuranceId: b.assuranceId,
+            patientId: { in: [...new Set(patientIds)] },
+          },
+          select: { patientId: true, numeroAttestation: true },
+        })
+      : Promise.resolve([]),
+  ])
+  const attestationByPatient = new Map(
+    affiliations.map((ap) => [
+      ap.patientId.toString(),
+      ap.numeroAttestation?.trim() || null,
+    ]),
+  )
 
   return toSerializable({
     id: b.id.toString(),
@@ -179,7 +199,10 @@ export async function getBordereauById(id: string): Promise<BordereauDetail | nu
       factureNumero: l.facture.numero,
       patientId: l.facture.patientId.toString(),
       patientLabel: labels.get(l.facture.patientId.toString())?.label ?? null,
+      numeroAttestation:
+        attestationByPatient.get(l.facture.patientId.toString()) ?? null,
       dateVisite: l.facture.visite.dateVisite.toISOString(),
+      montantPatient: round2(Number(l.facture.montantPatient)),
       montantAssurance: round2(Number(l.montantAssurance)),
       statutFacture: l.facture.statut,
       statutAssureur: (l.statut as BordereauFactureStatut) || 'EN_BORDEREAU',
